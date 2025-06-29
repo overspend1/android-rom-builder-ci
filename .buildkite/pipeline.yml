@@ -1,110 +1,660 @@
+env:
+  TERM: "xterm-256color"
+  DEBIAN_FRONTEND: "noninteractive"
+  LC_ALL: "C"
+
 steps:
-  - label: ":android: Setup Android Environment"
-    key: "setup"
+  - label: ":mag: Advanced System Diagnostics"
+    key: "diagnostics"
     command: |
-      echo "🚀 Setting up Android build environment..."
+      set -euo pipefail
       
-      # Check system requirements
-      echo "📊 System info:"
-      uname -a
-      free -h
-      df -h .
-      nproc
+      echo "🔍 Running comprehensive system diagnostics..."
       
-      # Check required tools
-      echo "🔧 Checking required tools..."
-      which python3 || echo "⚠️ Python3 not found"
-      which git || echo "⚠️ Git not found"
-      which curl || echo "⚠️ Curl not found"
+      # Create logs directory
+      mkdir -p logs
       
-      echo "✅ Environment check complete!"
+      # System information
+      {
+        echo "=== SYSTEM INFORMATION ==="
+        uname -a
+        lsb_release -a 2>/dev/null || cat /etc/os-release
+        
+        echo -e "\n=== HARDWARE SPECS ==="
+        echo "CPU Cores: $(nproc)"
+        echo "CPU Info: $(grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2 | xargs)"
+        echo "Total RAM: $(free -h | awk '/^Mem:/ {print $2}')"
+        echo "Available RAM: $(free -h | awk '/^Mem:/ {print $7}')"
+        
+        echo -e "\n=== DISK SPACE ==="
+        df -h / /tmp 2>/dev/null || true
+        
+        echo -e "\n=== NETWORK ==="
+        curl -s --max-time 10 https://httpbin.org/ip || echo "Network test failed"
+        
+        echo -e "\n=== JAVA VERSION ==="
+        java -version 2>&1 || echo "Java not found"
+        
+        echo -e "\n=== PYTHON VERSION ==="
+        python3 --version 2>&1 || echo "Python3 not found"
+        
+        echo -e "\n=== GIT VERSION ==="
+        git --version 2>&1 || echo "Git not found"
+        
+      } | tee logs/system-diagnostics.log
+      
+      # Validate minimum requirements
+      echo "🧪 Validating minimum requirements..."
+      
+      CORES=$(nproc)
+      RAM_GB=$(free -g | awk '/^Mem:/ {print $2}')
+      DISK_GB=$(df -BG / | awk 'NR==2 {print int($4)}')
+      
+      echo "📊 Resource Summary:"
+      echo "  CPU Cores: $CORES (minimum: 4)"
+      echo "  RAM: ${RAM_GB}GB (minimum: 16GB)"
+      echo "  Disk Space: ${DISK_GB}GB (minimum: 200GB)"
+      
+      # Check requirements
+      ERRORS=0
+      
+      if [ "$CORES" -lt 4 ]; then
+        echo "❌ Insufficient CPU cores: $CORES < 4"
+        ERRORS=$((ERRORS + 1))
+      fi
+      
+      if [ "$RAM_GB" -lt 16 ]; then
+        echo "⚠️ Warning: Low RAM: ${RAM_GB}GB < 16GB (may cause build failures)"
+      fi
+      
+      if [ "$DISK_GB" -lt 200 ]; then
+        echo "❌ Insufficient disk space: ${DISK_GB}GB < 200GB"
+        ERRORS=$((ERRORS + 1))
+      fi
+      
+      if [ "$ERRORS" -gt 0 ]; then
+        echo "💥 $ERRORS critical errors found! Build may fail."
+        echo "Please upgrade your agent hardware before proceeding."
+        exit 1
+      fi
+      
+      echo "✅ All system requirements satisfied!"
+      
+      # Upload diagnostics
+      buildkite-agent artifact upload "logs/system-diagnostics.log"
     agents:
       queue: "default"
+    timeout_in_minutes: 5
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 2
 
-  - label: ":package: Install Dependencies"
+  - label: ":package: Advanced Dependency Management"
     key: "install-deps"
-    depends_on: "setup"
+    depends_on: "diagnostics"
     command: |
-      echo "📦 Installing Android build dependencies..."
+      set -euo pipefail
       
-      # Update package lists
-      sudo apt-get update
+      echo "🔧 Advanced Android build dependency installation..."
       
-      # Install essential packages for Android building
-      sudo apt-get install -y \
-        git curl python3 python3-pip \
-        openjdk-8-jdk build-essential \
-        libssl-dev libc6-dev libncurses5 \
-        libncurses5-dev libreadline-dev \
-        libtinfo5 libxml2-utils xsltproc \
-        zip zlib1g-dev g++-multilib \
-        gcc-multilib lib32ncurses5-dev \
-        lib32readline-dev lib32z1-dev \
-        ccache bison flex bc rsync \
-        schedtool squashfs-tools \
-        python3-mako libffi-dev
+      # Function for retry logic
+      retry_command() {
+        local max_attempts=3
+        local delay=5
+        local command="$1"
+        local attempt=1
+        
+        until [ $attempt -gt $max_attempts ]; do
+          echo "Attempt $attempt/$max_attempts: $command"
+          if eval "$command"; then
+            return 0
+          else
+            echo "Command failed, retrying in ${delay}s..."
+            sleep $delay
+            delay=$((delay * 2))
+            attempt=$((attempt + 1))
+          fi
+        done
+        
+        echo "❌ Command failed after $max_attempts attempts: $command"
+        return 1
+      }
       
-      # Install repo tool
-      sudo curl https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
+      # Create installation log
+      mkdir -p logs
+      INSTALL_LOG="logs/dependency-install.log"
+      
+      {
+        echo "=== DEPENDENCY INSTALLATION LOG ==="
+        echo "Started: $(date)"
+        echo "Host: $(hostname)"
+        echo "User: $(whoami)"
+        echo "Working Directory: $(pwd)"
+        echo ""
+      } > "$INSTALL_LOG"
+      
+      # Check if we're on a supported OS
+      if ! command -v apt-get &> /dev/null; then
+        echo "❌ This pipeline requires Ubuntu/Debian with apt-get"
+        exit 1
+      fi
+      
+      # Update package lists with retry
+      echo "📦 Updating package lists..."
+      retry_command "sudo apt-get update" 2>&1 | tee -a "$INSTALL_LOG"
+      
+      # Install essential packages
+      echo "🔨 Installing Android build dependencies..."
+      
+      PACKAGES=(
+        # Core tools
+        "git" "curl" "wget" "python3" "python3-pip" "python-is-python3"
+        
+        # Java development
+        "openjdk-8-jdk" "openjdk-11-jdk"
+        
+        # Build tools
+        "build-essential" "libc6-dev" "libssl-dev"
+        
+        # Android specific
+        "libncurses5" "libncurses5-dev" "lib32ncurses5-dev"
+        "libreadline-dev" "lib32readline-dev" "libtinfo5"
+        "libxml2-utils" "xsltproc" "zip" "zlib1g-dev" "lib32z1-dev"
+        
+        # Multilib support
+        "g++-multilib" "gcc-multilib"
+        
+        # Build optimization
+        "ccache" "schedtool"
+        
+        # Additional tools
+        "bison" "flex" "bc" "rsync" "squashfs-tools"
+        "python3-mako" "libffi-dev"
+        
+        # System monitoring
+        "htop" "iotop" "tree"
+      )
+      
+      # Install packages in batches to avoid timeouts
+      BATCH_SIZE=10
+      for ((i=0; i<${#PACKAGES[@]}; i+=BATCH_SIZE)); do
+        BATCH=("${PACKAGES[@]:i:BATCH_SIZE}")
+        echo "Installing batch $((i/BATCH_SIZE + 1)): ${BATCH[*]}"
+        
+        retry_command "sudo apt-get install -y ${BATCH[*]}" 2>&1 | tee -a "$INSTALL_LOG"
+      done
+      
+      # Configure Java environment
+      echo "☕ Configuring Java environment..."
+      {
+        echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64"
+        echo "export PATH=\$JAVA_HOME/bin:\$PATH"
+      } >> ~/.bashrc
+      
+      export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+      export PATH=$JAVA_HOME/bin:$PATH
+      
+      # Install repo tool with verification
+      echo "🔄 Installing repo tool..."
+      REPO_URL="https://storage.googleapis.com/git-repo-downloads/repo"
+      
+      retry_command "curl -o /tmp/repo '$REPO_URL'" 2>&1 | tee -a "$INSTALL_LOG"
+      
+      # Verify repo download
+      if [ ! -f /tmp/repo ] || [ ! -s /tmp/repo ]; then
+        echo "❌ Failed to download repo tool"
+        exit 1
+      fi
+      
+      sudo mv /tmp/repo /usr/local/bin/repo
       sudo chmod a+x /usr/local/bin/repo
       
-      echo "✅ Dependencies installed!"
+      # Verify repo installation
+      if ! repo --version &>/dev/null; then
+        echo "❌ Repo tool installation failed"
+        exit 1
+      fi
+      
+      echo "✅ Repo tool installed: $(repo --version)"
+      
+      # Set up ccache
+      echo "🚀 Configuring ccache..."
+      export USE_CCACHE=1
+      export CCACHE_DIR="${HOME}/.ccache"
+      mkdir -p "$CCACHE_DIR"
+      ccache -M 100G
+      ccache -s
+      
+      # Configure git for repo
+      echo "🔧 Configuring git..."
+      git config --global user.email "${GIT_EMAIL:-buildbot@buildkite.local}"
+      git config --global user.name "${GIT_NAME:-Buildkite Android Builder}"
+      git config --global color.ui auto
+      
+      # Final verification
+      echo "🧪 Verifying installation..."
+      {
+        echo "=== INSTALLATION VERIFICATION ==="
+        echo "Java: $(java -version 2>&1 | head -1)"
+        echo "Python: $(python3 --version)"
+        echo "Git: $(git --version)"
+        echo "Repo: $(repo --version)"
+        echo "Make: $(make --version | head -1)"
+        echo "GCC: $(gcc --version | head -1)"
+        echo "Ccache: $(ccache --version | head -1)"
+        echo "Ccache config: $(ccache -s)"
+        echo "Completed: $(date)"
+      } | tee -a "$INSTALL_LOG"
+      
+      echo "✅ All dependencies installed and verified!"
+      
+      # Upload installation log
+      buildkite-agent artifact upload "$INSTALL_LOG"
     agents:
       queue: "default"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 2
+    env:
+      GIT_EMAIL: "buildbot@buildkite.local"
+      GIT_NAME: "Buildkite Android Builder"
 
-  - label: ":octocat: Initialize Android Source"
+  - label: ":octocat: Smart Source Repository Initialization"
     key: "init-source"
     depends_on: "install-deps"
     command: |
-      echo "🔧 Initializing Android source repository..."
+      set -euo pipefail
       
-      # Configuration
+      echo "🧠 Smart Android source repository initialization..."
+      
+      # Configuration with validation
       MANIFEST_URL="${MANIFEST_URL:-https://github.com/LineageOS/android.git}"
       MANIFEST_BRANCH="${MANIFEST_BRANCH:-lineage-21.0}"
+      MANIFEST_NAME="${MANIFEST_NAME:-default.xml}"
       
-      echo "📋 Using manifest: $MANIFEST_URL"
-      echo "🌿 Branch: $MANIFEST_BRANCH"
+      # Create detailed log
+      mkdir -p logs
+      INIT_LOG="logs/source-init.log"
       
-      # Configure git
-      git config --global user.email "buildbot@buildkite.local"
-      git config --global user.name "Buildkite Android Builder"
+      {
+        echo "=== SOURCE INITIALIZATION LOG ==="
+        echo "Started: $(date)"
+        echo "Manifest URL: $MANIFEST_URL"
+        echo "Branch: $MANIFEST_BRANCH"
+        echo "Manifest: $MANIFEST_NAME"
+        echo ""
+      } > "$INIT_LOG"
       
-      # Create and initialize source directory
-      mkdir -p android-source
-      cd android-source
+      # Validate manifest URL accessibility
+      echo "🔍 Validating manifest accessibility..." | tee -a "$INIT_LOG"
       
-      if [ ! -d ".repo" ]; then
-        echo "🔄 Initializing repo..."
-        repo init -u "$MANIFEST_URL" -b "$MANIFEST_BRANCH" --depth=1 --no-clone-bundle
-        echo "✅ Repository initialized!"
-      else
-        echo "📁 Repository already initialized"
+      if ! curl -s --head --fail "$MANIFEST_URL" >/dev/null 2>&1; then
+        echo "⚠️ Direct URL check failed, trying git ls-remote..." | tee -a "$INIT_LOG"
+        if ! git ls-remote "$MANIFEST_URL" >/dev/null 2>&1; then
+          echo "❌ Manifest URL is not accessible: $MANIFEST_URL" | tee -a "$INIT_LOG"
+          echo "Available alternatives:" | tee -a "$INIT_LOG"
+          echo "  - LineageOS: https://github.com/LineageOS/android.git" | tee -a "$INIT_LOG"
+          echo "  - AOSP: https://android.googlesource.com/platform/manifest" | tee -a "$INIT_LOG"
+          exit 1
+        fi
       fi
+      
+      echo "✅ Manifest URL validated" | tee -a "$INIT_LOG"
+      
+      # Create source directory with proper permissions
+      SOURCE_DIR="android-source"
+      echo "📁 Setting up source directory: $SOURCE_DIR" | tee -a "$INIT_LOG"
+      
+      if [ -d "$SOURCE_DIR" ]; then
+        echo "📂 Source directory exists, checking state..." | tee -a "$INIT_LOG"
+        cd "$SOURCE_DIR"
+        
+        if [ -d ".repo" ]; then
+          echo "🔍 Existing .repo found, validating..." | tee -a "$INIT_LOG"
+          
+          # Check if repo is corrupted
+          if ! repo info >/dev/null 2>&1; then
+            echo "⚠️ Corrupted .repo detected, reinitializing..." | tee -a "$INIT_LOG"
+            rm -rf .repo
+          else
+            # Check if manifest URL matches
+            CURRENT_URL=$(repo manifest | grep -o 'remote="[^"]*"' | head -1 | cut -d'"' -f2 || echo "unknown")
+            if [[ "$CURRENT_URL" != *"$(basename "$MANIFEST_URL" .git)"* ]]; then
+              echo "⚠️ Manifest URL mismatch, reinitializing..." | tee -a "$INIT_LOG"
+              echo "Current: $CURRENT_URL" | tee -a "$INIT_LOG"
+              echo "Expected: $MANIFEST_URL" | tee -a "$INIT_LOG"
+              rm -rf .repo
+            fi
+          fi
+        fi
+      else
+        mkdir -p "$SOURCE_DIR"
+        cd "$SOURCE_DIR"
+      fi
+      
+      # Initialize repository if needed
+      if [ ! -d ".repo" ]; then
+        echo "🔄 Initializing fresh repository..." | tee -a "../$INIT_LOG"
+        
+        # Advanced repo init with error handling
+        REPO_INIT_CMD="repo init"
+        REPO_INIT_CMD="$REPO_INIT_CMD -u '$MANIFEST_URL'"
+        REPO_INIT_CMD="$REPO_INIT_CMD -b '$MANIFEST_BRANCH'"
+        REPO_INIT_CMD="$REPO_INIT_CMD -m '$MANIFEST_NAME'"
+        REPO_INIT_CMD="$REPO_INIT_CMD --depth=1"
+        REPO_INIT_CMD="$REPO_INIT_CMD --no-clone-bundle"
+        REPO_INIT_CMD="$REPO_INIT_CMD --current-branch"
+        
+        echo "Executing: $REPO_INIT_CMD" | tee -a "../$INIT_LOG"
+        
+        # Retry mechanism for repo init
+        for attempt in 1 2 3; do
+          echo "Repository initialization attempt $attempt/3..." | tee -a "../$INIT_LOG"
+          
+          if eval "$REPO_INIT_CMD" 2>&1 | tee -a "../$INIT_LOG"; then
+            echo "✅ Repository initialized successfully!" | tee -a "../$INIT_LOG"
+            break
+          else
+            if [ $attempt -eq 3 ]; then
+              echo "❌ Repository initialization failed after 3 attempts" | tee -a "../$INIT_LOG"
+              exit 1
+            fi
+            echo "⚠️ Attempt $attempt failed, retrying in 10s..." | tee -a "../$INIT_LOG"
+            sleep 10
+            
+            # Clean up for retry
+            rm -rf .repo
+          fi
+        done
+      else
+        echo "📁 Repository already initialized, validating..." | tee -a "../$INIT_LOG"
+      fi
+      
+      # Validate repository state
+      echo "🧪 Validating repository state..." | tee -a "../$INIT_LOG"
+      
+      if ! repo info >/dev/null 2>&1; then
+        echo "❌ Repository validation failed" | tee -a "../$INIT_LOG"
+        exit 1
+      fi
+      
+      # Repository information
+      {
+        echo "=== REPOSITORY INFORMATION ==="
+        echo "Manifest URL: $(repo manifest | grep -o 'remote="[^"]*"' | head -1 || echo 'unknown')"
+        echo "Current branch: $(repo info | grep 'Current revision:' | head -1 || echo 'unknown')"
+        echo "Repository count: $(find .repo/projects -name "*.git" | wc -l 2>/dev/null || echo 'unknown')"
+        echo "Repository size: $(du -sh .repo 2>/dev/null | cut -f1 || echo 'unknown')"
+        echo "Initialized: $(date)"
+      } | tee -a "../$INIT_LOG"
+      
+      echo "✅ Source repository initialization complete!" | tee -a "../$INIT_LOG"
+      
+      # Upload initialization log
+      cd ..
+      buildkite-agent artifact upload "$INIT_LOG"
     agents:
       queue: "default"
-    timeout_in_minutes: 10
+    timeout_in_minutes: 15
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 2
     env:
       MANIFEST_URL: "https://github.com/LineageOS/android.git"
       MANIFEST_BRANCH: "lineage-21.0"
+      MANIFEST_NAME: "default.xml"
 
-  - label: ":arrows_counterclockwise: Sync Android Source"
+  - label: ":arrows_counterclockwise: Advanced Source Synchronization"
     key: "sync-source"
     depends_on: "init-source"
     command: |
-      echo "⬇️ Syncing Android source code..."
+      set -euo pipefail
+      
+      echo "🚀 Advanced Android source synchronization with smart recovery..."
       
       cd android-source
       
-      # Sync with parallel jobs
-      echo "🚀 Starting source sync with $(nproc) parallel jobs..."
-      repo sync -c -j$(nproc) --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune
+      # Configuration
+      MAX_JOBS=$(nproc)
+      SYNC_JOBS=${SYNC_JOBS:-$MAX_JOBS}
+      MAX_RETRIES=5
+      NETWORK_TIMEOUT=300
       
-      echo "✅ Source sync completed!"
-      echo "📊 Source size: $(du -sh . | cut -f1)"
+      # Create comprehensive sync log
+      mkdir -p ../logs
+      SYNC_LOG="../logs/source-sync.log"
+      
+      {
+        echo "=== SOURCE SYNCHRONIZATION LOG ==="
+        echo "Started: $(date)"
+        echo "Sync jobs: $SYNC_JOBS (max: $MAX_JOBS)"
+        echo "Max retries: $MAX_RETRIES"
+        echo "Network timeout: ${NETWORK_TIMEOUT}s"
+        echo ""
+      } > "$SYNC_LOG"
+      
+      # Function to check network connectivity
+      check_network() {
+        echo "🌐 Checking network connectivity..." | tee -a "$SYNC_LOG"
+        
+        local test_urls=(
+          "https://github.com"
+          "https://android.googlesource.com"
+          "https://source.android.com"
+        )
+        
+        for url in "${test_urls[@]}"; do
+          if curl -s --max-time 10 --head "$url" >/dev/null 2>&1; then
+            echo "✅ Network OK: $url" | tee -a "$SYNC_LOG"
+            return 0
+          else
+            echo "⚠️ Network issue: $url" | tee -a "$SYNC_LOG"
+          fi
+        done
+        
+        echo "❌ Network connectivity issues detected" | tee -a "$SYNC_LOG"
+        return 1
+      }
+      
+      # Function to monitor sync progress
+      monitor_sync_progress() {
+        local sync_pid=$1
+        local start_time=$(date +%s)
+        local last_update_time=$start_time
+        local last_size=0
+        
+        while kill -0 $sync_pid 2>/dev/null; do
+          sleep 30
+          
+          local current_time=$(date +%s)
+          local current_size=$(du -sb . 2>/dev/null | cut -f1 || echo "0")
+          local elapsed=$((current_time - start_time))
+          local since_update=$((current_time - last_update_time))
+          
+          # Calculate transfer rate
+          local size_diff=$((current_size - last_size))
+          local rate_bps=$((size_diff / 30))
+          local rate_mbps=$((rate_bps / 1024 / 1024))
+          
+          echo "📊 Sync progress: ${elapsed}s elapsed, ${current_size} bytes, ${rate_mbps}MB/s" | tee -a "$SYNC_LOG"
+          
+          # Check for stalled sync (no progress for 10 minutes)
+          if [ $since_update -gt 600 ] && [ $size_diff -eq 0 ]; then
+            echo "⚠️ Sync appears stalled, will restart if process exits" | tee -a "$SYNC_LOG"
+          fi
+          
+          last_size=$current_size
+          last_update_time=$current_time
+        done
+      }
+      
+      # Function to perform smart sync with recovery
+      smart_sync() {
+        local attempt=1
+        local base_delay=30
+        
+        while [ $attempt -le $MAX_RETRIES ]; do
+          echo "🔄 Sync attempt $attempt/$MAX_RETRIES..." | tee -a "$SYNC_LOG"
+          
+          # Check network before attempting sync
+          if ! check_network; then
+            echo "⚠️ Network issues detected, waiting before retry..." | tee -a "$SYNC_LOG"
+            sleep $((base_delay * attempt))
+            attempt=$((attempt + 1))
+            continue
+          fi
+          
+          # Determine sync strategy based on attempt
+          local sync_cmd="repo sync"
+          
+          if [ $attempt -eq 1 ]; then
+            # First attempt: full featured sync
+            sync_cmd="$sync_cmd -c -j$SYNC_JOBS --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune"
+          elif [ $attempt -eq 2 ]; then
+            # Second attempt: reduce parallelism
+            local reduced_jobs=$((SYNC_JOBS / 2))
+            [ $reduced_jobs -lt 1 ] && reduced_jobs=1
+            sync_cmd="$sync_cmd -c -j$reduced_jobs --force-sync --no-clone-bundle --no-tags"
+          else
+            # Subsequent attempts: minimal parallelism, more conservative
+            sync_cmd="$sync_cmd -c -j1 --force-sync --no-clone-bundle"
+          fi
+          
+          echo "Executing: $sync_cmd" | tee -a "$SYNC_LOG"
+          
+          # Start sync in background and monitor
+          timeout $NETWORK_TIMEOUT bash -c "$sync_cmd" 2>&1 | tee -a "$SYNC_LOG" &
+          local sync_pid=$!
+          
+          # Monitor progress in background
+          monitor_sync_progress $sync_pid &
+          local monitor_pid=$!
+          
+          # Wait for sync to complete
+          if wait $sync_pid; then
+            # Kill monitor
+            kill $monitor_pid 2>/dev/null || true
+            wait $monitor_pid 2>/dev/null || true
+            
+            echo "✅ Sync completed successfully on attempt $attempt!" | tee -a "$SYNC_LOG"
+            return 0
+          else
+            local exit_code=$?
+            
+            # Kill monitor
+            kill $monitor_pid 2>/dev/null || true
+            wait $monitor_pid 2>/dev/null || true
+            
+            echo "❌ Sync failed on attempt $attempt (exit code: $exit_code)" | tee -a "$SYNC_LOG"
+            
+            # Analyze failure and clean up if necessary
+            if [ $exit_code -eq 124 ]; then
+              echo "⏰ Sync timed out after ${NETWORK_TIMEOUT}s" | tee -a "$SYNC_LOG"
+            fi
+            
+            # Check for corrupted repositories and clean them
+            echo "🔍 Checking for corrupted repositories..." | tee -a "$SYNC_LOG"
+            if repo status | grep -q "error\|fatal\|corrupt"; then
+              echo "⚠️ Corrupted repositories detected, cleaning..." | tee -a "$SYNC_LOG"
+              repo forall -c 'git reset --hard HEAD; git clean -fdx' 2>&1 | tee -a "$SYNC_LOG" || true
+            fi
+            
+            if [ $attempt -eq $MAX_RETRIES ]; then
+              echo "💥 All sync attempts failed!" | tee -a "$SYNC_LOG"
+              return 1
+            fi
+            
+            # Progressive backoff delay
+            local delay=$((base_delay * attempt))
+            echo "⏱️ Waiting ${delay}s before retry..." | tee -a "$SYNC_LOG"
+            sleep $delay
+            
+            attempt=$((attempt + 1))
+          fi
+        done
+      }
+      
+      # Pre-sync validation
+      echo "🧪 Pre-sync validation..." | tee -a "$SYNC_LOG"
+      
+      if ! repo info >/dev/null 2>&1; then
+        echo "❌ Repository not properly initialized" | tee -a "$SYNC_LOG"
+        exit 1
+      fi
+      
+      # Check available disk space
+      local available_gb=$(df -BG . | awk 'NR==2 {print int($4)}')
+      echo "💾 Available disk space: ${available_gb}GB" | tee -a "$SYNC_LOG"
+      
+      if [ $available_gb -lt 150 ]; then
+        echo "⚠️ Warning: Low disk space (${available_gb}GB < 150GB)" | tee -a "$SYNC_LOG"
+        echo "Sync may fail due to insufficient space" | tee -a "$SYNC_LOG"
+      fi
+      
+      # Record pre-sync state
+      {
+        echo "=== PRE-SYNC STATE ==="
+        echo "Repository count: $(find .repo/projects -name "*.git" | wc -l 2>/dev/null || echo 'unknown')"
+        echo "Current size: $(du -sh . 2>/dev/null | cut -f1 || echo 'unknown')"
+        echo "Available space: ${available_gb}GB"
+        echo ""
+      } | tee -a "$SYNC_LOG"
+      
+      # Perform smart sync
+      local sync_start_time=$(date +%s)
+      
+      if smart_sync; then
+        local sync_end_time=$(date +%s)
+        local sync_duration=$((sync_end_time - sync_start_time))
+        
+        # Post-sync validation and statistics
+        echo "📊 Post-sync analysis..." | tee -a "$SYNC_LOG"
+        
+        {
+          echo "=== SYNC RESULTS ==="
+          echo "Status: SUCCESS"
+          echo "Duration: $(date -u -d @$sync_duration +%H:%M:%S)"
+          echo "Final size: $(du -sh . 2>/dev/null | cut -f1 || echo 'unknown')"
+          echo "Repository count: $(find .repo/projects -name "*.git" | wc -l 2>/dev/null || echo 'unknown')"
+          echo "Completed: $(date)"
+          echo ""
+          
+          echo "=== PROJECT STATUS ==="
+          repo status | head -20 || echo "Status check failed"
+          echo ""
+          
+          echo "=== SYNC STATISTICS ==="
+          echo "Jobs used: $SYNC_JOBS"
+          echo "Average speed: $(echo "scale=2; $(du -sb . | cut -f1) / $sync_duration / 1024 / 1024" | bc 2>/dev/null || echo "unknown") MB/s"
+          
+        } | tee -a "$SYNC_LOG"
+        
+        echo "✅ Source synchronization completed successfully!" | tee -a "$SYNC_LOG"
+      else
+        echo "💥 Source synchronization failed after all retry attempts" | tee -a "$SYNC_LOG"
+        
+        # Upload failure logs for debugging
+        cd ..
+        buildkite-agent artifact upload "$SYNC_LOG"
+        exit 1
+      fi
+      
+      # Upload sync log
+      cd ..
+      buildkite-agent artifact upload "$SYNC_LOG"
     agents:
       queue: "default"
-    timeout_in_minutes: 120
+    timeout_in_minutes: 180
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 1
+    env:
+      SYNC_JOBS: "8"
 
   - label: ":hammer_and_wrench: Build Android ROM"
     key: "build-rom"
