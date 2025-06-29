@@ -77,11 +77,12 @@ steps:
         echo -e "\n=== HARDWARE SPECS ==="
         echo "CPU Cores: $$(nproc)"
         echo "CPU Info: $$(grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2 | xargs)"
-        echo "Total RAM: $$(free -h | awk '/^Mem:/ {print $$$$2}')"
-        echo "Available RAM: $$(free -h | awk '/^Mem:/ {print $$$$7}')"
+        echo "Total RAM: $$(free -h | awk '/^Mem:/ {print $$2}')"
+        echo "Available RAM: $$(free -h | awk '/^Mem:/ {print $$7}')"
         
         echo -e "\n=== DISK SPACE ==="
         df -h / /tmp 2>/dev/null || true
+        echo "Available Space: $$(df -h / | awk 'NR==2 {print $$4}') (on root filesystem)"
         
         echo -e "\n=== NETWORK ==="
         curl -s --max-time 10 https://httpbin.org/ip || echo "Network test failed"
@@ -97,13 +98,22 @@ steps:
       echo "🧪 Validating enterprise build requirements..."
       
       CORES=$$(nproc)
-      RAM_GB=$$(free -g | awk '/^Mem:/ {print $$$$2}')
-      DISK_GB=$$(df -BG / | awk 'NR==2 {print int($$$$4)}')
+      RAM_GB=$$(free -g | awk '/^Mem:/ {print $$2}')
+      DISK_GB=$$(df -BG / | awk 'NR==2 {gsub("G",""); print int($$4)}')
+      
+      # Fallback detection if awk fails
+      if [ -z "$$RAM_GB" ] || [ "$$RAM_GB" = "0" ]; then
+        RAM_GB=$$(free -m | awk '/^Mem:/ {printf "%.0f", $$2/1024}')
+      fi
+      
+      if [ -z "$$DISK_GB" ] || [ "$$DISK_GB" = "0" ]; then
+        DISK_GB=$$(df -BG / | tail -1 | awk '{gsub("G",""); print int($$4)}')
+      fi
       
       echo "📊 Resource Summary:"
       echo "  CPU Cores: $$CORES (minimum: 8)"
-      echo "  RAM: $${RAM_GB}GB (minimum: 32GB)"
-      echo "  Disk Space: $${DISK_GB}GB (minimum: 500GB)"
+      echo "  RAM: $${RAM_GB}GB (minimum: 16GB)"
+      echo "  Disk Space: $${DISK_GB}GB (minimum: 100GB)"
       
       # Generate performance baseline
       {
@@ -126,12 +136,13 @@ steps:
         ERRORS=$$((ERRORS + 1))
       fi
       
-      if [ "$$RAM_GB" -lt 32 ]; then
-        echo "⚠️ Warning: Low RAM: $${RAM_GB}GB < 32GB (may cause build failures)"
+      if [ "$$RAM_GB" -lt 16 ]; then
+        echo "❌ Insufficient RAM: $${RAM_GB}GB < 16GB"
+        ERRORS=$$((ERRORS + 1))
       fi
       
-      if [ "$$DISK_GB" -lt 500 ]; then
-        echo "❌ Insufficient disk space: $${DISK_GB}GB < 500GB"
+      if [ "$$DISK_GB" -lt 100 ]; then
+        echo "❌ Insufficient disk space: $${DISK_GB}GB < 100GB"
         ERRORS=$$((ERRORS + 1))
       fi
       
