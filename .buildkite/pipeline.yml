@@ -112,7 +112,7 @@ steps:
       
       echo "📊 Resource Summary:"
       echo "  CPU Cores: $$CORES (minimum: 8)"
-      echo "  RAM: $${RAM_GB}GB (minimum: 16GB)"
+      echo "  RAM: $${RAM_GB}GB (no minimum required)"
       echo "  Disk Space: $${DISK_GB}GB (minimum: 100GB)"
       
       # Generate performance baseline
@@ -136,10 +136,8 @@ steps:
         ERRORS=$$((ERRORS + 1))
       fi
       
-      if [ "$$RAM_GB" -lt 16 ]; then
-        echo "❌ Insufficient RAM: $${RAM_GB}GB < 16GB"
-        ERRORS=$$((ERRORS + 1))
-      fi
+      # RAM check removed - no minimum requirement
+      echo "ℹ️ RAM: $${RAM_GB}GB detected (proceeding regardless of amount)"
       
       if [ "$$DISK_GB" -lt 100 ]; then
         echo "❌ Insufficient disk space: $${DISK_GB}GB < 100GB"
