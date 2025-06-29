@@ -237,38 +237,21 @@ steps:
       # Install core dependencies in optimized batches
       echo "🛠️ Installing Android build dependencies..."
       
-      # Core system tools
-      CORE_PACKAGES=(
-        "git" "curl" "wget" "python3" "python3-pip" "python-is-python3"
-        "build-essential" "libc6-dev" "libssl-dev" "pkg-config"
-      )
+      # Install packages directly to avoid array expansion issues
+      echo "📥 Installing core system tools..."
+      retry_command "$$SUDO_CMD apt-get install -y git curl wget python3 python3-pip python-is-python3 build-essential libc6-dev libssl-dev pkg-config" 2>&1 | tee -a "$$INSTALL_LOG"
       
-      # Java development environment
-      JAVA_PACKAGES=(
-        "openjdk-8-jdk" "openjdk-11-jdk" "openjdk-17-jdk"
-      )
+      echo "📥 Installing Java development environment..."
+      retry_command "$$SUDO_CMD apt-get install -y openjdk-8-jdk openjdk-11-jdk openjdk-17-jdk" 2>&1 | tee -a "$$INSTALL_LOG"
       
-      # Android-specific libraries
-      ANDROID_PACKAGES=(
-        "libncurses5" "libncurses5-dev" "lib32ncurses5-dev"
-        "libreadline-dev" "lib32readline-dev" "libtinfo5"
-        "libxml2-utils" "xsltproc" "zip" "unzip"
-        "zlib1g-dev" "lib32z1-dev" "liblz4-tool"
-      )
+      echo "📥 Installing Android-specific libraries..."
+      retry_command "$$SUDO_CMD apt-get install -y libncurses5 libncurses5-dev lib32ncurses5-dev libreadline-dev lib32readline-dev libtinfo5" 2>&1 | tee -a "$$INSTALL_LOG"
       
-      # Build optimization tools
-      BUILD_PACKAGES=(
-        "ccache" "schedtool" "bc" "bison" "flex"
-        "g++-multilib" "gcc-multilib" "rsync"
-        "squashfs-tools" "python3-mako" "libffi-dev"
-      )
+      echo "📥 Installing XML and compression tools..."
+      retry_command "$$SUDO_CMD apt-get install -y libxml2-utils xsltproc zip unzip zlib1g-dev lib32z1-dev liblz4-tool" 2>&1 | tee -a "$$INSTALL_LOG"
       
-      # Install packages in batches
-      for package_set in "CORE_PACKAGES[@]" "JAVA_PACKAGES[@]" "ANDROID_PACKAGES[@]" "BUILD_PACKAGES[@]"; do
-        eval "packages=(\$${package_set})"
-        echo "📥 Installing package set: $${packages[*]}"
-        retry_command "$$SUDO_CMD apt-get install -y $${packages[*]}" 2>&1 | tee -a "$$INSTALL_LOG"
-      done
+      echo "📥 Installing build optimization tools..."
+      retry_command "$$SUDO_CMD apt-get install -y ccache schedtool bc bison flex g++-multilib gcc-multilib rsync squashfs-tools python3-mako libffi-dev" 2>&1 | tee -a "$$INSTALL_LOG"
       
       # Configure Java environment for Android builds
       echo "☕ Configuring Java environment..."
