@@ -23,8 +23,8 @@ steps:
         echo -e "\n=== HARDWARE SPECS ==="
         echo "CPU Cores: $(nproc)"
         echo "CPU Info: $(grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2 | xargs)"
-        echo "Total RAM: $(free -h | awk '/^Mem:/ {print $2}')"
-        echo "Available RAM: $(free -h | awk '/^Mem:/ {print $7}')"
+                 echo "Total RAM: $(free -h | awk '/^Mem:/ {print $$2}')"
+         echo "Available RAM: $(free -h | awk '/^Mem:/ {print $$7}')"
         
         echo -e "\n=== DISK SPACE ==="
         df -h / /tmp 2>/dev/null || true
@@ -46,9 +46,9 @@ steps:
       # Validate minimum requirements
       echo "🧪 Validating minimum requirements..."
       
-      CORES=$(nproc)
-      RAM_GB=$(free -g | awk '/^Mem:/ {print $2}')
-      DISK_GB=$(df -BG / | awk 'NR==2 {print int($4)}')
+             CORES=$(nproc)
+       RAM_GB=$(free -g | awk '/^Mem:/ {print $$2}')
+       DISK_GB=$(df -BG / | awk 'NR==2 {print int($$4)}')
       
       echo "📊 Resource Summary:"
       echo "  CPU Cores: $CORES (minimum: 4)"
@@ -587,7 +587,7 @@ steps:
       fi
       
       # Check available disk space
-      local available_gb=$(df -BG . | awk 'NR==2 {print int($4)}')
+             local available_gb=$(df -BG . | awk 'NR==2 {print int($$4)}')
       echo "💾 Available disk space: ${available_gb}GB" | tee -a "$SYNC_LOG"
       
       if [ $available_gb -lt 150 ]; then
@@ -698,10 +698,10 @@ steps:
         while kill -0 $build_pid 2>/dev/null; do
           {
             echo "Timestamp: $(date)"
-            echo "CPU Usage: $(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)%"
-            echo "Memory: $(free -h | awk '/^Mem:/ {printf "Used: %s/%s (%.1f%%)\n", $3, $2, $3/$2*100}')"
-            echo "Disk: $(df -h . | awk 'NR==2 {printf "Used: %s/%s (%s)\n", $3, $2, $5}')"
-            echo "Load Average: $(uptime | awk -F'load average:' '{print $2}')"
+                       echo "CPU Usage: $(top -bn1 | grep "Cpu(s)" | awk '{print $$2}' | cut -d'%' -f1)%"
+           echo "Memory: $(free -h | awk '/^Mem:/ {printf "Used: %s/%s (%.1f%%)\n", $$3, $$2, $$3/$$2*100}')"
+           echo "Disk: $(df -h . | awk 'NR==2 {printf "Used: %s/%s (%s)\n", $$3, $$2, $$5}')"
+           echo "Load Average: $(uptime | awk -F'load average:' '{print $$2}')"
             echo "Active processes: $(ps aux | wc -l)"
             echo "Ccache stats: $(ccache -s | grep "cache hit rate" || echo "N/A")"
             echo "Build output size: $(du -sh ../out 2>/dev/null | cut -f1 || echo "N/A")"
@@ -709,8 +709,8 @@ steps:
           } >> "$resource_log"
           
           # Check for resource exhaustion
-          local mem_usage=$(free | awk '/^Mem:/ {printf "%.1f", $3/$2*100}')
-          local disk_usage=$(df . | awk 'NR==2 {print $5}' | sed 's/%//')
+                     local mem_usage=$(free | awk '/^Mem:/ {printf "%.1f", $$3/$$2*100}')
+           local disk_usage=$(df . | awk 'NR==2 {print $$5}' | sed 's/%//')
           
           if (( $(echo "$mem_usage > 95" | bc -l) )); then
             echo "🚨 CRITICAL: Memory usage critical ($mem_usage%)" | tee -a "$BUILD_LOG"
@@ -730,8 +730,8 @@ steps:
       echo "🧪 Validating build environment..." | tee -a "$BUILD_LOG"
       
       # Check Java version
-      JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
-      echo "Java version: $JAVA_VERSION" | tee -a "$BUILD_LOG"
+             JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $$2}')
+       echo "Java version: $JAVA_VERSION" | tee -a "$BUILD_LOG"
       
       # Validate build tools
       if ! command -v make &> /dev/null; then
@@ -740,7 +740,7 @@ steps:
       fi
       
       # Check available memory
-      AVAILABLE_MEM_GB=$(free -g | awk '/^Mem:/ {print $7}')
+             AVAILABLE_MEM_GB=$(free -g | awk '/^Mem:/ {print $$7}')
       if [ "$AVAILABLE_MEM_GB" -lt 8 ]; then
         echo "⚠️ Low available memory: ${AVAILABLE_MEM_GB}GB" | tee -a "$BUILD_LOG"
         # Reduce build jobs if memory is low
