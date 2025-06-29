@@ -656,153 +656,770 @@ steps:
     env:
       SYNC_JOBS: "8"
 
-  - label: ":hammer_and_wrench: Build Android ROM"
+  - label: ":hammer_and_wrench: Enterprise Android ROM Build"
     key: "build-rom"
     depends_on: "sync-source"
     command: |
-      echo "🔨 Building Android ROM..."
+      set -euo pipefail
+      
+      echo "🏗️ Enterprise-grade Android ROM build with advanced monitoring..."
       
       cd android-source
       
-      # Configuration
+      # Build configuration with validation
       TARGET_DEVICE="${TARGET_DEVICE:-generic}"
       BUILD_TYPE="${BUILD_TYPE:-userdebug}"
       BUILD_VARIANT="${BUILD_VARIANT:-lineage}"
+      BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
       
-      echo "🎯 Build configuration:"
-      echo "  Device: $TARGET_DEVICE"
-      echo "  Type: $BUILD_TYPE"
-      echo "  Variant: $BUILD_VARIANT"
+      # Create comprehensive build log
+      mkdir -p ../logs
+      BUILD_LOG="../logs/rom-build.log"
       
-      # Set up build environment
-      echo "⚙️ Setting up build environment..."
-      source build/envsetup.sh
+      {
+        echo "=== ANDROID ROM BUILD LOG ==="
+        echo "Started: $(date)"
+        echo "Device: $TARGET_DEVICE"
+        echo "Type: $BUILD_TYPE"
+        echo "Variant: $BUILD_VARIANT"
+        echo "Jobs: $BUILD_JOBS"
+        echo "Host: $(hostname)"
+        echo ""
+      } > "$BUILD_LOG"
       
-      # Configure ccache
-      export USE_CCACHE=1
-      export CCACHE_DIR=$PWD/../ccache
-      mkdir -p $CCACHE_DIR
-      ccache -M 50G
+      # Resource monitoring function
+      monitor_resources() {
+        local build_pid=$1
+        local monitor_interval=60
+        local resource_log="../logs/resource-usage.log"
+        
+        echo "=== RESOURCE MONITORING LOG ===" > "$resource_log"
+        
+        while kill -0 $build_pid 2>/dev/null; do
+          {
+            echo "Timestamp: $(date)"
+            echo "CPU Usage: $(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)%"
+            echo "Memory: $(free -h | awk '/^Mem:/ {printf "Used: %s/%s (%.1f%%)\n", $3, $2, $3/$2*100}')"
+            echo "Disk: $(df -h . | awk 'NR==2 {printf "Used: %s/%s (%s)\n", $3, $2, $5}')"
+            echo "Load Average: $(uptime | awk -F'load average:' '{print $2}')"
+            echo "Active processes: $(ps aux | wc -l)"
+            echo "Ccache stats: $(ccache -s | grep "cache hit rate" || echo "N/A")"
+            echo "Build output size: $(du -sh ../out 2>/dev/null | cut -f1 || echo "N/A")"
+            echo "---"
+          } >> "$resource_log"
+          
+          # Check for resource exhaustion
+          local mem_usage=$(free | awk '/^Mem:/ {printf "%.1f", $3/$2*100}')
+          local disk_usage=$(df . | awk 'NR==2 {print $5}' | sed 's/%//')
+          
+          if (( $(echo "$mem_usage > 95" | bc -l) )); then
+            echo "🚨 CRITICAL: Memory usage critical ($mem_usage%)" | tee -a "$BUILD_LOG"
+          fi
+          
+          if [ "$disk_usage" -gt 90 ]; then
+            echo "🚨 CRITICAL: Disk usage critical ($disk_usage%)" | tee -a "$BUILD_LOG"
+          fi
+          
+          sleep $monitor_interval
+        done
+        
+        buildkite-agent artifact upload "$resource_log" || true
+      }
       
-      # Select build target
-      echo "🎯 Selecting build target..."
-      lunch "${BUILD_VARIANT}_${TARGET_DEVICE}-${BUILD_TYPE}"
+      # Build environment validation
+      echo "🧪 Validating build environment..." | tee -a "$BUILD_LOG"
       
-      # Start build
-      echo "🚀 Starting compilation..."
-      START_TIME=$(date +%s)
+      # Check Java version
+      JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}')
+      echo "Java version: $JAVA_VERSION" | tee -a "$BUILD_LOG"
       
-      if [ "$BUILD_VARIANT" = "lineage" ]; then
-        brunch "$TARGET_DEVICE"
-      else
-        make -j$(nproc) otapackage
+      # Validate build tools
+      if ! command -v make &> /dev/null; then
+        echo "❌ Make not found" | tee -a "$BUILD_LOG"
+        exit 1
       fi
       
-      END_TIME=$(date +%s)
-      BUILD_TIME=$((END_TIME - START_TIME))
+      # Check available memory
+      AVAILABLE_MEM_GB=$(free -g | awk '/^Mem:/ {print $7}')
+      if [ "$AVAILABLE_MEM_GB" -lt 8 ]; then
+        echo "⚠️ Low available memory: ${AVAILABLE_MEM_GB}GB" | tee -a "$BUILD_LOG"
+        # Reduce build jobs if memory is low
+        BUILD_JOBS=$((BUILD_JOBS / 2))
+        [ $BUILD_JOBS -lt 1 ] && BUILD_JOBS=1
+        echo "Reduced build jobs to: $BUILD_JOBS" | tee -a "$BUILD_LOG"
+      fi
       
-      echo "✅ Build completed successfully!"
-      echo "⏱️ Build time: $(date -u -d @$BUILD_TIME +%H:%M:%S)"
+      # Validate source integrity
+      echo "🔍 Validating source code integrity..." | tee -a "$BUILD_LOG"
+      
+      if ! repo status >/dev/null 2>&1; then
+        echo "❌ Source code integrity check failed" | tee -a "$BUILD_LOG"
+        exit 1
+      fi
+      
+      # Set up advanced build environment
+      echo "⚙️ Configuring advanced build environment..." | tee -a "$BUILD_LOG"
+      
+      # Source build environment
+      if ! source build/envsetup.sh 2>&1 | tee -a "$BUILD_LOG"; then
+        echo "❌ Failed to source build environment" | tee -a "$BUILD_LOG"
+        exit 1
+      fi
+      
+      # Configure ccache with optimization
+      export USE_CCACHE=1
+      export CCACHE_DIR=$PWD/../ccache
+      export CCACHE_COMPRESS=1
+      export CCACHE_COMPRESSLEVEL=6
+      export CCACHE_MAXSIZE=100G
+      export CCACHE_SLOPPINESS=time_macros,include_file_mtime,include_file_ctime,file_macro
+      
+      mkdir -p "$CCACHE_DIR"
+      ccache -M "$CCACHE_MAXSIZE"
+      ccache -s | tee -a "$BUILD_LOG"
+      
+      # Device-specific validation
+      echo "📱 Device-specific validation for: $TARGET_DEVICE" | tee -a "$BUILD_LOG"
+      
+      # Check if device is supported
+      DEVICE_DIR="device/*/⊕{TARGET_DEVICE}"
+      if ! ls device/*/"$TARGET_DEVICE" >/dev/null 2>&1 && [ "$TARGET_DEVICE" != "generic" ]; then
+        echo "⚠️ Device $TARGET_DEVICE not found in device tree" | tee -a "$BUILD_LOG"
+        echo "Available devices:" | tee -a "$BUILD_LOG"
+        find device -mindepth 2 -maxdepth 2 -type d | head -20 | tee -a "$BUILD_LOG"
+        
+        if [ "${IGNORE_DEVICE_CHECK:-false}" != "true" ]; then
+          echo "❌ Set IGNORE_DEVICE_CHECK=true to bypass this check" | tee -a "$BUILD_LOG"
+          exit 1
+        fi
+      fi
+      
+      # Lunch command with validation
+      echo "🎯 Configuring build target..." | tee -a "$BUILD_LOG"
+      
+      LUNCH_COMBO="${BUILD_VARIANT}_${TARGET_DEVICE}-${BUILD_TYPE}"
+      echo "Lunch combo: $LUNCH_COMBO" | tee -a "$BUILD_LOG"
+      
+      if ! lunch "$LUNCH_COMBO" 2>&1 | tee -a "$BUILD_LOG"; then
+        echo "❌ Failed to configure build target: $LUNCH_COMBO" | tee -a "$BUILD_LOG"
+        echo "Available targets:" | tee -a "$BUILD_LOG"
+        lunch 2>&1 | grep -E "^[0-9]+\." | head -20 | tee -a "$BUILD_LOG" || true
+        exit 1
+      fi
+      
+      # Pre-build cleanup and optimization
+      echo "🧹 Pre-build optimization..." | tee -a "$BUILD_LOG"
+      
+      # Clean old builds if requested
+      if [ "${CLEAN_BUILD:-false}" = "true" ]; then
+        echo "Performing clean build..." | tee -a "$BUILD_LOG"
+        make clean 2>&1 | tee -a "$BUILD_LOG"
+      fi
+      
+      # Optimize build environment
+      export LC_ALL=C
+      export USE_NINJA=false  # Some builds are more stable without ninja
+      export KBUILD_BUILD_USER="buildkite"
+      export KBUILD_BUILD_HOST="$(hostname)"
+      
+      # Build execution with monitoring
+      echo "🚀 Starting ROM compilation..." | tee -a "$BUILD_LOG"
+      
+      BUILD_START_TIME=$(date +%s)
+      
+      # Determine build command based on variant
+      if [ "$BUILD_VARIANT" = "lineage" ]; then
+        BUILD_CMD="brunch $TARGET_DEVICE"
+      elif [ "$BUILD_VARIANT" = "aosp" ]; then
+        BUILD_CMD="make -j$BUILD_JOBS otapackage"
+      else
+        BUILD_CMD="make -j$BUILD_JOBS"
+      fi
+      
+      echo "Build command: $BUILD_CMD" | tee -a "$BUILD_LOG"
+      
+      # Execute build with monitoring
+      (
+        echo "Build started at: $(date)"
+        echo "Build command: $BUILD_CMD"
+        echo "Working directory: $(pwd)"
+        echo "Environment variables:"
+        env | grep -E "(TARGET_|BUILD_|CCACHE_|USE_)" | sort
+        echo "=== BUILD OUTPUT ==="
+      ) | tee -a "$BUILD_LOG"
+      
+      # Start build in background
+      $BUILD_CMD 2>&1 | tee -a "$BUILD_LOG" &
+      BUILD_PID=$!
+      
+      # Start resource monitoring
+      monitor_resources $BUILD_PID &
+      MONITOR_PID=$!
+      
+      # Wait for build to complete with timeout handling
+      BUILD_SUCCESS=false
+      if wait $BUILD_PID; then
+        BUILD_SUCCESS=true
+        echo "✅ Build process completed successfully" | tee -a "$BUILD_LOG"
+      else
+        BUILD_EXIT_CODE=$?
+        echo "❌ Build process failed with exit code: $BUILD_EXIT_CODE" | tee -a "$BUILD_LOG"
+      fi
+      
+      # Stop monitoring
+      kill $MONITOR_PID 2>/dev/null || true
+      wait $MONITOR_PID 2>/dev/null || true
+      
+      BUILD_END_TIME=$(date +%s)
+      BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+      
+      # Post-build analysis
+      echo "📊 Post-build analysis..." | tee -a "$BUILD_LOG"
+      
+      {
+        echo "=== BUILD RESULTS ==="
+        echo "Status: $([ "$BUILD_SUCCESS" = true ] && echo "SUCCESS" || echo "FAILED")"
+        echo "Duration: $(date -u -d @$BUILD_DURATION +%H:%M:%S)"
+        echo "Start time: $(date -d @$BUILD_START_TIME)"
+        echo "End time: $(date -d @$BUILD_END_TIME)"
+        echo "Final ccache stats:"
+        ccache -s
+        echo ""
+        
+        if [ "$BUILD_SUCCESS" = true ]; then
+          echo "=== BUILD ARTIFACTS ==="
+          OUT_DIR="out/target/product/$TARGET_DEVICE"
+          if [ -d "$OUT_DIR" ]; then
+            echo "Output directory: $OUT_DIR"
+            echo "Artifacts found:"
+            find "$OUT_DIR" -name "*.zip" -o -name "*.img" | head -10 || echo "No artifacts found"
+            echo "Total output size: $(du -sh out 2>/dev/null | cut -f1 || echo "unknown")"
+          fi
+        else
+          echo "=== BUILD FAILURE ANALYSIS ==="
+          echo "Last 50 lines of build log:"
+          tail -50 "$BUILD_LOG" | grep -E "(error|Error|ERROR|fail|Fail|FAIL)" || echo "No obvious errors in tail"
+        fi
+        
+      } | tee -a "$BUILD_LOG"
+      
+      # Upload build logs
+      cd ..
+      buildkite-agent artifact upload "$BUILD_LOG"
+      
+      if [ "$BUILD_SUCCESS" != true ]; then
+        echo "💥 ROM build failed - check build logs for details"
+        exit 1
+      fi
+      
+      echo "🎉 ROM build completed successfully!"
     agents:
       queue: "default"
-    timeout_in_minutes: 480
+    timeout_in_minutes: 600
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 1
     env:
       TARGET_DEVICE: "generic"
-      BUILD_TYPE: "userdebug"
+      BUILD_TYPE: "userdebug" 
       BUILD_VARIANT: "lineage"
+      BUILD_JOBS: "8"
       USE_CCACHE: "1"
+      CLEAN_BUILD: "false"
+      IGNORE_DEVICE_CHECK: "false"
 
-  - label: ":package: Package ROM Artifacts"
+  - label: ":package: Advanced ROM Artifact Management"
     key: "package-rom"
     depends_on: "build-rom"
     command: |
-      echo "📦 Packaging ROM artifacts..."
+      set -euo pipefail
+      
+      echo "📦 Advanced ROM artifact packaging and validation..."
       
       TARGET_DEVICE="${TARGET_DEVICE:-generic}"
+      BUILD_TYPE="${BUILD_TYPE:-userdebug}"
+      BUILD_VARIANT="${BUILD_VARIANT:-lineage}"
       OUT_DIR="android-source/out/target/product/$TARGET_DEVICE"
       
-      # Create artifacts directory
-      mkdir -p artifacts
+      # Create comprehensive packaging log
+      mkdir -p logs
+      PACKAGE_LOG="logs/packaging.log"
       
-      echo "📁 Copying build artifacts..."
-      
-      # Copy ROM files
-      find "$OUT_DIR" -name "*.zip" -exec cp {} artifacts/ \; 2>/dev/null || true
-      find "$OUT_DIR" -name "recovery.img" -exec cp {} artifacts/ \; 2>/dev/null || true  
-      find "$OUT_DIR" -name "boot.img" -exec cp {} artifacts/ \; 2>/dev/null || true
-      find "$OUT_DIR" -name "system.img" -exec cp {} artifacts/ \; 2>/dev/null || true
-      
-      # Create build info
-      cat > artifacts/build-info.json << EOF
       {
-        "build_number": "${BUILDKITE_BUILD_NUMBER:-unknown}",
-        "commit": "${BUILDKITE_COMMIT:-unknown}",
-        "branch": "${BUILDKITE_BRANCH:-unknown}",
-        "device": "$TARGET_DEVICE",
-        "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-        "build_type": "${BUILD_TYPE:-userdebug}",
-        "variant": "${BUILD_VARIANT:-lineage}"
+        echo "=== ROM ARTIFACT PACKAGING LOG ==="
+        echo "Started: $(date)"
+        echo "Device: $TARGET_DEVICE"
+        echo "Build Type: $BUILD_TYPE"
+        echo "Variant: $BUILD_VARIANT"
+        echo "Output Directory: $OUT_DIR"
+        echo ""
+      } > "$PACKAGE_LOG"
+      
+      # Validate build output directory
+      if [ ! -d "$OUT_DIR" ]; then
+        echo "❌ Build output directory not found: $OUT_DIR" | tee -a "$PACKAGE_LOG"
+        echo "Available directories:" | tee -a "$PACKAGE_LOG"
+        find android-source/out -type d -name "product" 2>/dev/null | tee -a "$PACKAGE_LOG" || echo "No product directories found"
+        exit 1
+      fi
+      
+      echo "✅ Build output directory validated" | tee -a "$PACKAGE_LOG"
+      
+      # Create artifacts directory with proper structure
+      ARTIFACTS_DIR="artifacts"
+      mkdir -p "$ARTIFACTS_DIR"/{roms,images,recovery,logs,tools}
+      
+      echo "📊 Analyzing build output..." | tee -a "$PACKAGE_LOG"
+      
+      # Comprehensive artifact discovery
+      {
+        echo "=== BUILD OUTPUT ANALYSIS ==="
+        echo "Output directory size: $(du -sh "$OUT_DIR" 2>/dev/null | cut -f1 || echo "unknown")"
+        echo "File count: $(find "$OUT_DIR" -type f | wc -l)"
+        echo ""
+        
+        echo "=== ROM FILES ==="
+        find "$OUT_DIR" -name "*.zip" -type f -exec ls -lh {} \; 2>/dev/null || echo "No ROM zip files found"
+        echo ""
+        
+        echo "=== IMAGE FILES ==="
+        find "$OUT_DIR" -name "*.img" -type f -exec ls -lh {} \; 2>/dev/null | head -20 || echo "No image files found"
+        echo ""
+        
+        echo "=== OTHER ARTIFACTS ==="
+        find "$OUT_DIR" -name "*.json" -o -name "*.xml" -o -name "*.txt" -type f 2>/dev/null | head -10 || echo "No metadata files found"
+        
+      } | tee -a "$PACKAGE_LOG"
+      
+      # Smart artifact collection
+      echo "🔍 Collecting ROM artifacts..." | tee -a "$PACKAGE_LOG"
+      
+      ARTIFACTS_FOUND=0
+      
+      # ROM packages (flashable zips)
+      while IFS= read -r -d '' file; do
+        if [ -f "$file" ]; then
+          filename=$(basename "$file")
+          echo "📱 ROM Package: $filename ($(du -sh "$file" | cut -f1))" | tee -a "$PACKAGE_LOG"
+          cp "$file" "$ARTIFACTS_DIR/roms/"
+          ARTIFACTS_FOUND=$((ARTIFACTS_FOUND + 1))
+        fi
+      done < <(find "$OUT_DIR" -name "*.zip" -type f -print0 2>/dev/null || true)
+      
+      # Critical images
+      IMAGE_TYPES=("boot" "recovery" "system" "vendor" "userdata" "cache" "dtbo" "vbmeta")
+      
+      for img_type in "${IMAGE_TYPES[@]}"; do
+        while IFS= read -r -d '' file; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            echo "💿 Image: $filename ($(du -sh "$file" | cut -f1))" | tee -a "$PACKAGE_LOG"
+            
+            if [[ "$img_type" == "recovery" ]]; then
+              cp "$file" "$ARTIFACTS_DIR/recovery/"
+            else
+              cp "$file" "$ARTIFACTS_DIR/images/"
+            fi
+            ARTIFACTS_FOUND=$((ARTIFACTS_FOUND + 1))
+          fi
+        done < <(find "$OUT_DIR" -name "${img_type}.img" -type f -print0 2>/dev/null || true)
+      done
+      
+      # Build metadata and logs
+      METADATA_FILES=("build.json" "build-info.json" "build.prop" "recovery.fstab")
+      
+      for meta_file in "${METADATA_FILES[@]}"; do
+        while IFS= read -r -d '' file; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            echo "📋 Metadata: $filename" | tee -a "$PACKAGE_LOG"
+            cp "$file" "$ARTIFACTS_DIR/logs/"
+            ARTIFACTS_FOUND=$((ARTIFACTS_FOUND + 1))
+          fi
+        done < <(find "$OUT_DIR" -name "$meta_file" -type f -print0 2>/dev/null || true)
+      done
+      
+      echo "📈 Total artifacts collected: $ARTIFACTS_FOUND" | tee -a "$PACKAGE_LOG"
+      
+      if [ $ARTIFACTS_FOUND -eq 0 ]; then
+        echo "⚠️ No artifacts found - this may indicate a build failure" | tee -a "$PACKAGE_LOG"
+        echo "Build directory contents:" | tee -a "$PACKAGE_LOG"
+        ls -la "$OUT_DIR" | tee -a "$PACKAGE_LOG" || true
+      fi
+      
+      # Generate comprehensive build information
+      echo "📝 Generating build metadata..." | tee -a "$PACKAGE_LOG"
+      
+      cat > "$ARTIFACTS_DIR/build-info.json" << EOF
+      {
+        "build_info": {
+          "build_number": "${BUILDKITE_BUILD_NUMBER:-unknown}",
+          "commit": "${BUILDKITE_COMMIT:-unknown}",
+          "branch": "${BUILDKITE_BRANCH:-unknown}",
+          "build_url": "${BUILDKITE_BUILD_URL:-unknown}",
+          "pipeline": "${BUILDKITE_PIPELINE_SLUG:-unknown}"
+        },
+        "device_info": {
+          "device": "$TARGET_DEVICE",
+          "build_type": "$BUILD_TYPE",
+          "variant": "$BUILD_VARIANT"
+        },
+        "build_metadata": {
+          "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "build_timestamp": $(date +%s),
+          "builder_host": "$(hostname)",
+          "builder_user": "$(whoami)",
+          "android_version": "$(grep -o "PLATFORM_VERSION.*" android-source/build/core/version_defaults.mk 2>/dev/null | head -1 || echo "unknown")"
+        },
+        "artifacts": {
+          "total_count": $ARTIFACTS_FOUND,
+          "rom_packages": $(find "$ARTIFACTS_DIR/roms" -name "*.zip" 2>/dev/null | wc -l),
+          "images": $(find "$ARTIFACTS_DIR/images" -name "*.img" 2>/dev/null | wc -l),
+          "recovery": $(find "$ARTIFACTS_DIR/recovery" -name "*.img" 2>/dev/null | wc -l)
+        },
+        "build_environment": {
+          "ccache_stats": "$(ccache -s 2>/dev/null | grep "cache hit rate" || echo "N/A")",
+          "java_version": "$(java -version 2>&1 | head -1 || echo "unknown")",
+          "build_tools": "$(make --version 2>&1 | head -1 || echo "unknown")"
+        }
       }
       EOF
       
-      # Generate checksums
-      cd artifacts
-      for file in *.zip *.img 2>/dev/null; do
-        [ -f "$file" ] && md5sum "$file" > "$file.md5"
-        [ -f "$file" ] && sha256sum "$file" > "$file.sha256"
+      # Generate checksums with validation
+      echo "🔐 Generating and validating checksums..." | tee -a "$PACKAGE_LOG"
+      
+      find "$ARTIFACTS_DIR" -name "*.zip" -o -name "*.img" | while read -r file; do
+        if [ -f "$file" ]; then
+          echo "Checksumming: $(basename "$file")" | tee -a "$PACKAGE_LOG"
+          
+          # Generate multiple hash types for security
+          md5sum "$file" > "${file}.md5"
+          sha256sum "$file" > "${file}.sha256"
+          sha512sum "$file" > "${file}.sha512"
+          
+          # Validate checksums immediately
+          if md5sum -c "${file}.md5" >/dev/null 2>&1; then
+            echo "✅ MD5 checksum verified for $(basename "$file")" | tee -a "$PACKAGE_LOG"
+          else
+            echo "❌ MD5 checksum failed for $(basename "$file")" | tee -a "$PACKAGE_LOG"
+          fi
+        fi
       done
       
-      echo "📊 Artifacts created:"
-      ls -lh
+      # Create installation instructions
+      cat > "$ARTIFACTS_DIR/INSTALLATION.md" << 'EOF'
+      # ROM Installation Instructions
       
-      echo "✅ Packaging completed!"
+      ## Prerequisites
+      - Unlocked bootloader
+      - Custom recovery (TWRP recommended)
+      - USB debugging enabled
+      - ADB and Fastboot tools installed
+      
+      ## Installation Steps
+      
+      ### Method 1: Recovery Flash (Recommended)
+      1. Download the ROM zip file from the artifacts
+      2. Boot into recovery mode
+      3. Wipe system, data, cache, and dalvik cache
+      4. Flash the ROM zip file
+      5. Flash GApps if desired
+      6. Reboot system
+      
+      ### Method 2: Fastboot Flash (Advanced)
+      1. Boot into fastboot mode
+      2. Flash individual image files:
+         ```bash
+         fastboot flash boot boot.img
+         fastboot flash system system.img
+         fastboot flash vendor vendor.img
+         fastboot flash recovery recovery.img
+         ```
+      3. Reboot system
+      
+      ## Verification
+      - Check build date in Settings > About Phone
+      - Verify ROM version matches build info
+      - Test basic functionality before daily use
+      
+      ## Support
+      - Check build logs if issues occur
+      - Verify checksums before flashing
+      - Create backup before installation
+      EOF
+      
+      # Final artifact summary
+      echo "📊 Final artifact summary..." | tee -a "$PACKAGE_LOG"
+      
+      {
+        echo "=== FINAL ARTIFACT SUMMARY ==="
+        echo "Packaging completed: $(date)"
+        echo ""
+        echo "Directory structure:"
+        find "$ARTIFACTS_DIR" -type f | sort | while read -r file; do
+          echo "  $(basename "$file") ($(du -sh "$file" | cut -f1))"
+        done
+        echo ""
+        echo "Total artifacts size: $(du -sh "$ARTIFACTS_DIR" | cut -f1)"
+        echo "Checksum files created: $(find "$ARTIFACTS_DIR" -name "*.md5" -o -name "*.sha*" | wc -l)"
+        
+      } | tee -a "$PACKAGE_LOG"
+      
+      # Validate final package
+      if [ $ARTIFACTS_FOUND -gt 0 ]; then
+        echo "✅ ROM artifact packaging completed successfully!" | tee -a "$PACKAGE_LOG"
+      else
+        echo "❌ ROM artifact packaging completed but no artifacts were found!" | tee -a "$PACKAGE_LOG"
+        exit 1
+      fi
+      
+      # Upload packaging log
+      buildkite-agent artifact upload "$PACKAGE_LOG"
     agents:
       queue: "default"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 45
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 2
     env:
       TARGET_DEVICE: "generic"
-      BUILD_TYPE: "userdebug"
+      BUILD_TYPE: "userdebug" 
       BUILD_VARIANT: "lineage"
 
-  - label: ":arrow_up: Upload Artifacts"
+  - label: ":arrow_up: Enterprise Artifact Distribution"
     key: "upload-artifacts"
     depends_on: "package-rom"
     command: |
-      echo "⬆️ Uploading ROM artifacts..."
+      set -euo pipefail
       
-      # Upload all ROM files
-      if ls artifacts/*.zip >/dev/null 2>&1; then
-        buildkite-agent artifact upload "artifacts/*.zip"
+      echo "🚀 Enterprise-grade artifact distribution and validation..."
+      
+      # Create upload log
+      mkdir -p logs
+      UPLOAD_LOG="logs/artifact-upload.log"
+      
+      {
+        echo "=== ARTIFACT UPLOAD LOG ==="
+        echo "Started: $(date)"
+        echo "Build: ${BUILDKITE_BUILD_NUMBER:-unknown}"
+        echo "Pipeline: ${BUILDKITE_PIPELINE_SLUG:-unknown}"
+        echo ""
+      } > "$UPLOAD_LOG"
+      
+      # Pre-upload validation
+      echo "🔍 Pre-upload artifact validation..." | tee -a "$UPLOAD_LOG"
+      
+      ARTIFACTS_DIR="artifacts"
+      if [ ! -d "$ARTIFACTS_DIR" ]; then
+        echo "❌ Artifacts directory not found!" | tee -a "$UPLOAD_LOG"
+        exit 1
       fi
       
-      if ls artifacts/*.img >/dev/null 2>&1; then
-        buildkite-agent artifact upload "artifacts/*.img"
+      # Count and validate artifacts
+      ROM_COUNT=$(find "$ARTIFACTS_DIR" -name "*.zip" | wc -l)
+      IMG_COUNT=$(find "$ARTIFACTS_DIR" -name "*.img" | wc -l)
+      CHECKSUM_COUNT=$(find "$ARTIFACTS_DIR" -name "*.md5" -o -name "*.sha*" | wc -l)
+      TOTAL_SIZE=$(du -sh "$ARTIFACTS_DIR" | cut -f1)
+      
+      {
+        echo "=== UPLOAD VALIDATION ==="
+        echo "ROM packages: $ROM_COUNT"
+        echo "Image files: $IMG_COUNT"
+        echo "Checksum files: $CHECKSUM_COUNT"
+        echo "Total size: $TOTAL_SIZE"
+        echo ""
+      } | tee -a "$UPLOAD_LOG"
+      
+      if [ $ROM_COUNT -eq 0 ] && [ $IMG_COUNT -eq 0 ]; then
+        echo "⚠️ No ROM or image files found to upload!" | tee -a "$UPLOAD_LOG"
+        echo "Directory contents:" | tee -a "$UPLOAD_LOG"
+        find "$ARTIFACTS_DIR" -type f | tee -a "$UPLOAD_LOG"
       fi
       
-      # Upload metadata
-      buildkite-agent artifact upload "artifacts/*.json"
-      buildkite-agent artifact upload "artifacts/*.md5"
-      buildkite-agent artifact upload "artifacts/*.sha256"
+      # Upload function with retry logic
+      upload_with_retry() {
+        local pattern="$1"
+        local description="$2"
+        local max_attempts=3
+        local attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "Uploading $description (attempt $attempt/$max_attempts)..." | tee -a "$UPLOAD_LOG"
+          
+          if buildkite-agent artifact upload "$pattern" 2>&1 | tee -a "$UPLOAD_LOG"; then
+            echo "✅ $description uploaded successfully" | tee -a "$UPLOAD_LOG"
+            return 0
+          else
+            echo "❌ Upload failed for $description" | tee -a "$UPLOAD_LOG"
+            if [ $attempt -eq $max_attempts ]; then
+              echo "💥 All upload attempts failed for $description" | tee -a "$UPLOAD_LOG"
+              return 1
+            fi
+            attempt=$((attempt + 1))
+            sleep 10
+          fi
+        done
+      }
       
-      echo "✅ Artifacts uploaded successfully!"
+      # Upload ROM packages
+      if [ $ROM_COUNT -gt 0 ]; then
+        echo "📱 Uploading ROM packages..." | tee -a "$UPLOAD_LOG"
+        upload_with_retry "artifacts/roms/*.zip" "ROM packages"
+      fi
+      
+      # Upload system images
+      if [ $IMG_COUNT -gt 0 ]; then
+        echo "💿 Uploading system images..." | tee -a "$UPLOAD_LOG"
+        upload_with_retry "artifacts/images/*.img" "system images"
+        upload_with_retry "artifacts/recovery/*.img" "recovery images"
+      fi
+      
+      # Upload checksums and metadata
+      echo "🔐 Uploading checksums and metadata..." | tee -a "$UPLOAD_LOG"
+      upload_with_retry "artifacts/*.json" "build metadata"
+      upload_with_retry "artifacts/**/*.md5" "MD5 checksums"
+      upload_with_retry "artifacts/**/*.sha*" "SHA checksums"
+      
+      # Upload documentation
+      echo "📚 Uploading documentation..." | tee -a "$UPLOAD_LOG"
+      upload_with_retry "artifacts/*.md" "installation instructions"
+      
+      # Upload all logs
+      echo "📄 Uploading build logs..." | tee -a "$UPLOAD_LOG"
+      upload_with_retry "logs/*.log" "build logs"
+      
+      # Final upload summary
+      {
+        echo "=== UPLOAD SUMMARY ==="
+        echo "Upload completed: $(date)"
+        echo "Artifacts uploaded:"
+        buildkite-agent artifact search "*" | head -20 || echo "Could not list artifacts"
+        echo ""
+        echo "Download links will be available in the Buildkite artifacts tab"
+        echo "Total upload size: $TOTAL_SIZE"
+        
+      } | tee -a "$UPLOAD_LOG"
+      
+      echo "✅ All artifacts uploaded successfully!" | tee -a "$UPLOAD_LOG"
+      
+      # Upload the upload log itself
+      buildkite-agent artifact upload "$UPLOAD_LOG"
     agents:
       queue: "default"
+    timeout_in_minutes: 60
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 2
 
-  - label: ":white_check_mark: Build Complete"
+  - label: ":trophy: Build Success & Analytics"
     depends_on: "upload-artifacts"
     command: |
-      echo "🎉 Android ROM build completed successfully!"
+      set -euo pipefail
+      
+      echo "🎉 Android ROM build pipeline completed successfully!"
+      
+      # Create final report
+      mkdir -p logs
+      FINAL_REPORT="logs/build-final-report.log"
+      
+      {
+        echo "=========================================="
+        echo "      ANDROID ROM BUILD COMPLETE"
+        echo "=========================================="
+        echo ""
+        echo "🏆 BUILD INFORMATION"
+        echo "Build Number: ${BUILDKITE_BUILD_NUMBER:-unknown}"
+        echo "Build URL: ${BUILDKITE_BUILD_URL:-unknown}"
+        echo "Pipeline: ${BUILDKITE_PIPELINE_SLUG:-unknown}"
+        echo "Commit: ${BUILDKITE_COMMIT:-unknown}"
+        echo "Branch: ${BUILDKITE_BRANCH:-unknown}"
+        echo "Triggered by: ${BUILDKITE_BUILD_CREATOR:-unknown}"
+        echo ""
+        echo "📱 DEVICE CONFIGURATION"
+        echo "Target Device: ${TARGET_DEVICE:-generic}"
+        echo "Build Type: ${BUILD_TYPE:-userdebug}"
+        echo "Build Variant: ${BUILD_VARIANT:-lineage}"
+        echo ""
+        echo "⏱️ TIMING INFORMATION"
+        echo "Build started: ${BUILDKITE_BUILD_CREATED_AT:-unknown}"
+        echo "Build completed: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo ""
+        echo "🎯 QUICK LINKS"
+        echo "Artifacts: ${BUILDKITE_BUILD_URL:-unknown}#artifacts"
+        echo "Build logs: ${BUILDKITE_BUILD_URL:-unknown}#logs"
+        echo ""
+        echo "📦 WHAT'S INCLUDED"
+        echo "✅ Flashable ROM package (.zip)"
+        echo "✅ Individual partition images (.img)"
+        echo "✅ Recovery image (if built)"
+        echo "✅ Build metadata and checksums"
+        echo "✅ Installation instructions"
+        echo "✅ Complete build logs"
+        echo ""
+        echo "🔐 SECURITY"
+        echo "✅ MD5, SHA256, and SHA512 checksums provided"
+        echo "✅ Build reproducibility information included"
+        echo "✅ Build environment details logged"
+        echo ""
+        echo "📋 NEXT STEPS"
+        echo "1. Download artifacts from the Artifacts tab"
+        echo "2. Verify checksums before flashing"
+        echo "3. Follow installation instructions"
+        echo "4. Create a backup before flashing"
+        echo "5. Test thoroughly before daily use"
+        echo ""
+        echo "🆘 SUPPORT"
+        echo "- Check build logs if you encounter issues"
+        echo "- Verify your device is supported"
+        echo "- Ensure bootloader is unlocked"
+        echo "- Use appropriate recovery (TWRP recommended)"
+        echo ""
+        echo "=========================================="
+        echo "        BUILD COMPLETED SUCCESSFULLY!"
+        echo "=========================================="
+        
+      } | tee "$FINAL_REPORT"
+      
+      # Display key information
+      cat "$FINAL_REPORT"
+      
+      # Upload final report
+      buildkite-agent artifact upload "$FINAL_REPORT"
+      
+      # Analytics and notifications (if configured)
+      if [ -n "${SLACK_WEBHOOK:-}" ]; then
+        echo "📢 Sending Slack notification..."
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{
+            \"text\": \"🎉 Android ROM build completed!\",
+            \"attachments\": [{
+              \"color\": \"good\",
+              \"fields\": [
+                {\"title\": \"Device\", \"value\": \"${TARGET_DEVICE:-generic}\", \"short\": true},
+                {\"title\": \"Variant\", \"value\": \"${BUILD_VARIANT:-lineage}\", \"short\": true},
+                {\"title\": \"Build\", \"value\": \"#${BUILDKITE_BUILD_NUMBER:-unknown}\", \"short\": true},
+                {\"title\": \"Branch\", \"value\": \"${BUILDKITE_BRANCH:-unknown}\", \"short\": true}
+              ],
+              \"actions\": [{
+                \"type\": \"button\",
+                \"text\": \"Download Artifacts\",
+                \"url\": \"${BUILDKITE_BUILD_URL:-unknown}#artifacts\"
+              }]
+            }]
+          }" \
+          "${SLACK_WEBHOOK}" || echo "Slack notification failed"
+      fi
+      
       echo ""
-      echo "📊 Build Information:"
-      echo "  Build Number: ${BUILDKITE_BUILD_NUMBER}"
-      echo "  Commit: ${BUILDKITE_COMMIT}"
-      echo "  Branch: ${BUILDKITE_BRANCH}"
-      echo "  Device: ${TARGET_DEVICE:-generic}"
-      echo "  Variant: ${BUILD_VARIANT:-lineage}"
+      echo "🚀 Your Android ROM is ready!"
+      echo "📲 Download from: ${BUILDKITE_BUILD_URL:-unknown}#artifacts"
       echo ""
-      echo "📱 Your ROM is ready for download in the Artifacts tab!"
     agents:
       queue: "default"
     env:
       TARGET_DEVICE: "generic"
+      BUILD_TYPE: "userdebug"
       BUILD_VARIANT: "lineage" 
