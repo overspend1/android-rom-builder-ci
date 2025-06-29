@@ -1,0 +1,38 @@
+# Android ROM Build Artifacts
+source/
+out/
+ccache/
+artifacts/
+
+# Environment files
+.env
+
+# Docker volumes
+docker/source/
+docker/out/
+docker/ccache/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+.cache/ 

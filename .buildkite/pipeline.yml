@@ -1,0 +1,107 @@
+steps:
+  - label: ":android: Setup Environment"
+    key: "setup"
+    command: |
+      echo "Setting up Android build environment..."
+      docker --version
+      docker-compose --version
+      echo "Environment ready!"
+    agents:
+      queue: "default"
+
+  - label: ":package: Build Docker Image"
+    key: "build-image"
+    depends_on: "setup"
+    command: |
+      echo "Building Android ROM builder Docker image..."
+      cd docker
+      docker build -t android-rom-builder:latest .
+      echo "Docker image built successfully!"
+    agents:
+      queue: "default"
+
+  - label: ":octocat: Initialize Android Source"
+    key: "init-source"
+    depends_on: "build-image"
+    command: |
+      echo "Initializing Android source repository..."
+      mkdir -p source
+      docker run --rm \
+        -v $$(pwd)/source:/home/buildbot/android/source \
+        -v $$(pwd)/scripts:/home/buildbot/scripts:ro \
+        android-rom-builder:latest \
+        /home/buildbot/scripts/init-source.sh
+    agents:
+      queue: "default"
+    timeout_in_minutes: 30
+
+  - label: ":arrows_counterclockwise: Sync Android Source"  
+    key: "sync-source"
+    depends_on: "init-source"
+    command: |
+      echo "Syncing Android source code..."
+      docker run --rm \
+        -v $$(pwd)/source:/home/buildbot/android/source \
+        -v $$(pwd)/ccache:/home/buildbot/android/ccache \
+        -v $$(pwd)/scripts:/home/buildbot/scripts:ro \
+        android-rom-builder:latest \
+        /home/buildbot/scripts/sync-source.sh
+    agents:
+      queue: "default"
+    timeout_in_minutes: 120
+
+  - label: ":hammer_and_wrench: Build Android ROM"
+    key: "build-rom"
+    depends_on: "sync-source"
+    command: |
+      echo "Building Android ROM..."
+      docker run --rm \
+        -v $$(pwd)/source:/home/buildbot/android/source \
+        -v $$(pwd)/out:/home/buildbot/android/out \
+        -v $$(pwd)/ccache:/home/buildbot/android/ccache \
+        -v $$(pwd)/scripts:/home/buildbot/scripts:ro \
+        --shm-size=2g \
+        android-rom-builder:latest \
+        /home/buildbot/scripts/build-rom.sh
+    agents:
+      queue: "default"
+    timeout_in_minutes: 480
+    env:
+      USE_CCACHE: "1"
+      CCACHE_DIR: "/home/buildbot/android/ccache"
+
+  - label: ":package: Package ROM"
+    key: "package-rom"
+    depends_on: "build-rom"
+    command: |
+      echo "Packaging ROM artifacts..."
+      docker run --rm \
+        -v $$(pwd)/out:/home/buildbot/android/out \
+        -v $$(pwd)/artifacts:/home/buildbot/artifacts \
+        -v $$(pwd)/scripts:/home/buildbot/scripts:ro \
+        android-rom-builder:latest \
+        /home/buildbot/scripts/package-rom.sh
+    agents:
+      queue: "default"
+    timeout_in_minutes: 30
+
+  - label: ":arrow_up: Upload Artifacts" 
+    key: "upload-artifacts"
+    depends_on: "package-rom"
+    command: |
+      echo "Uploading ROM artifacts..."
+      buildkite-agent artifact upload "artifacts/*.zip"
+      buildkite-agent artifact upload "artifacts/*.img"
+      buildkite-agent artifact upload "artifacts/*.json"
+    agents:
+      queue: "default"
+
+  - label: ":white_check_mark: Build Complete"
+    depends_on: "upload-artifacts"
+    command: |
+      echo ":tada: Android ROM build completed successfully!"
+      echo "Build Number: $BUILDKITE_BUILD_NUMBER"
+      echo "Commit: $BUILDKITE_COMMIT"
+      echo "Branch: $BUILDKITE_BRANCH"
+    agents:
+      queue: "default" 
