@@ -1,30 +1,84 @@
+# 🚀 Enterprise Android ROM Build Pipeline
+# The most advanced Buildkite pipeline for Android ROM development
+# 
+# Features:
+# - Enterprise-grade error detection & auto-recovery
+# - Advanced resource monitoring & optimization  
+# - Intelligent retry logic with progressive backoff
+# - Comprehensive build analytics & reporting
+# - Multi-device support with automatic detection
+# - Real-time notifications & status updates
+# - Dynamic pipeline generation
+# - Artifact management with versioning
+# - Performance optimization & caching
+
 env:
+  # Build Environment
   TERM: "xterm-256color"
   DEBIAN_FRONTEND: "noninteractive"
-  LC_ALL: "C"
+  LC_ALL: "C.UTF-8"
+  
+  # Pipeline Configuration
+  PIPELINE_VERSION: "3.0.0"
+  BUILD_TIMEOUT: "10800"
+  MAX_PARALLEL_JOBS: "16"
+  
+  # Android Build Configuration
+  TARGET_DEVICE: "${TARGET_DEVICE:-lineage_generic_x86_64-userdebug}"
+  BUILD_VARIANT: "${BUILD_VARIANT:-userdebug}"
+  BUILD_TYPE: "${BUILD_TYPE:-lineage}"
+  
+  # Repository Configuration
+  MANIFEST_URL: "${MANIFEST_URL:-https://github.com/LineageOS/android.git}"
+  MANIFEST_BRANCH: "${MANIFEST_BRANCH:-lineage-21.0}"
+  
+  # Device Tree Configuration
+  DEVICE_TREE_URL: "${DEVICE_TREE_URL:-}"
+  DEVICE_TREE_BRANCH: "${DEVICE_TREE_BRANCH:-lineage-21.0}"
+  KERNEL_SOURCE_URL: "${KERNEL_SOURCE_URL:-}"
+  KERNEL_SOURCE_BRANCH: "${KERNEL_SOURCE_BRANCH:-lineage-21.0}"
+  VENDOR_TREE_URL: "${VENDOR_TREE_URL:-}"
+  VENDOR_TREE_BRANCH: "${VENDOR_TREE_BRANCH:-lineage-21.0}"
+  
+  # Performance Tuning
+  USE_CCACHE: "1"
+  CCACHE_SIZE: "200G"
+  BUILD_JOBS: "${BUILD_JOBS:-}"
+  SYNC_JOBS: "${SYNC_JOBS:-}"
+  
+  # Quality Control
+  CLEAN_BUILD: "${CLEAN_BUILD:-false}"
+  IGNORE_DEVICE_CHECK: "${IGNORE_DEVICE_CHECK:-false}"
+  
+  # Notifications
+  SLACK_WEBHOOK: "${SLACK_WEBHOOK:-}"
+  
+  # Security
+  ENABLE_SIGNING: "${ENABLE_SIGNING:-false}"
+  SIGNING_KEY_PATH: "${SIGNING_KEY_PATH:-}"
 
 steps:
-  - label: ":mag: Advanced System Diagnostics"
-    key: "diagnostics"
+  - label: ":mag: Enterprise System Diagnostics & Validation"
+    key: "system-diagnostics"
     command: |
       set -euo pipefail
       
-      echo "🔍 Running comprehensive system diagnostics..."
+      echo "🔍 Running comprehensive enterprise system diagnostics..."
       
       # Create logs directory
       mkdir -p logs
       
-      # System information
+      # System information with proper variable escaping
       {
         echo "=== SYSTEM INFORMATION ==="
         uname -a
         lsb_release -a 2>/dev/null || cat /etc/os-release
         
         echo -e "\n=== HARDWARE SPECS ==="
-        echo "CPU Cores: $(nproc)"
-        echo "CPU Info: $(grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2 | xargs)"
-                 echo "Total RAM: $(free -h | awk '/^Mem:/ {print $$2}')"
-         echo "Available RAM: $(free -h | awk '/^Mem:/ {print $$7}')"
+        echo "CPU Cores: $$(nproc)"
+        echo "CPU Info: $$(grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2 | xargs)"
+        echo "Total RAM: $$(free -h | awk '/^Mem:/ {print $$$$2}')"
+        echo "Available RAM: $$(free -h | awk '/^Mem:/ {print $$$$7}')"
         
         echo -e "\n=== DISK SPACE ==="
         df -h / /tmp 2>/dev/null || true
@@ -32,174 +86,179 @@ steps:
         echo -e "\n=== NETWORK ==="
         curl -s --max-time 10 https://httpbin.org/ip || echo "Network test failed"
         
-        echo -e "\n=== JAVA VERSION ==="
+        echo -e "\n=== BUILD TOOLS ==="
         java -version 2>&1 || echo "Java not found"
-        
-        echo -e "\n=== PYTHON VERSION ==="
         python3 --version 2>&1 || echo "Python3 not found"
-        
-        echo -e "\n=== GIT VERSION ==="
         git --version 2>&1 || echo "Git not found"
         
       } | tee logs/system-diagnostics.log
       
-      # Validate minimum requirements
-      echo "🧪 Validating minimum requirements..."
+      # Validate minimum requirements with proper variable handling
+      echo "🧪 Validating enterprise build requirements..."
       
-             CORES=$(nproc)
-       RAM_GB=$(free -g | awk '/^Mem:/ {print $$2}')
-       DISK_GB=$(df -BG / | awk 'NR==2 {print int($$4)}')
+      CORES=$$(nproc)
+      RAM_GB=$$(free -g | awk '/^Mem:/ {print $$$$2}')
+      DISK_GB=$$(df -BG / | awk 'NR==2 {print int($$$$4)}')
       
       echo "📊 Resource Summary:"
-      echo "  CPU Cores: $CORES (minimum: 4)"
-      echo "  RAM: ${RAM_GB}GB (minimum: 16GB)"
-      echo "  Disk Space: ${DISK_GB}GB (minimum: 200GB)"
+      echo "  CPU Cores: $$CORES (minimum: 8)"
+      echo "  RAM: $${RAM_GB}GB (minimum: 32GB)"
+      echo "  Disk Space: $${DISK_GB}GB (minimum: 500GB)"
       
-      # Check requirements
+      # Generate performance baseline
+      {
+        echo "{"
+        echo "  \"timestamp\": \"$$(date -Iseconds)\","
+        echo "  \"cpu_cores\": $$CORES,"
+        echo "  \"ram_gb\": $$RAM_GB,"
+        echo "  \"disk_gb\": $$DISK_GB,"
+        echo "  \"cpu_model\": \"$$(grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2 | xargs)\","
+        echo "  \"kernel\": \"$$(uname -r)\","
+        echo "  \"os\": \"$$(lsb_release -ds 2>/dev/null || cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"')\""
+        echo "}"
+      } > logs/hardware-report.json
+      
+      # Check requirements and fail if insufficient
       ERRORS=0
       
-      if [ "$CORES" -lt 4 ]; then
-        echo "❌ Insufficient CPU cores: $CORES < 4"
-        ERRORS=$((ERRORS + 1))
+      if [ "$$CORES" -lt 8 ]; then
+        echo "❌ Insufficient CPU cores: $$CORES < 8"
+        ERRORS=$$((ERRORS + 1))
       fi
       
-      if [ "$RAM_GB" -lt 16 ]; then
-        echo "⚠️ Warning: Low RAM: ${RAM_GB}GB < 16GB (may cause build failures)"
+      if [ "$$RAM_GB" -lt 32 ]; then
+        echo "⚠️ Warning: Low RAM: $${RAM_GB}GB < 32GB (may cause build failures)"
       fi
       
-      if [ "$DISK_GB" -lt 200 ]; then
-        echo "❌ Insufficient disk space: ${DISK_GB}GB < 200GB"
-        ERRORS=$((ERRORS + 1))
+      if [ "$$DISK_GB" -lt 500 ]; then
+        echo "❌ Insufficient disk space: $${DISK_GB}GB < 500GB"
+        ERRORS=$$((ERRORS + 1))
       fi
       
-      if [ "$ERRORS" -gt 0 ]; then
-        echo "💥 $ERRORS critical errors found! Build may fail."
-        echo "Please upgrade your agent hardware before proceeding."
+      if [ "$$ERRORS" -gt 0 ]; then
+        echo "💥 $$ERRORS critical errors found! Build cannot proceed."
+        echo "Please upgrade your build infrastructure."
         exit 1
       fi
       
-      echo "✅ All system requirements satisfied!"
+      echo "✅ All enterprise requirements satisfied!"
       
       # Upload diagnostics
       buildkite-agent artifact upload "logs/system-diagnostics.log"
+      buildkite-agent artifact upload "logs/hardware-report.json"
     agents:
       queue: "default"
-    timeout_in_minutes: 5
+    timeout_in_minutes: 10
     retry:
       automatic:
         - exit_status: "*"
           limit: 2
+    artifact_paths:
+      - "logs/system-diagnostics.log"
+      - "logs/hardware-report.json"
 
-  - label: ":package: Advanced Dependency Management"
-    key: "install-deps"
-    depends_on: "diagnostics"
+  - label: ":package: Enterprise Dependency Management"
+    key: "dependency-management"
+    depends_on: "system-diagnostics"
     command: |
       set -euo pipefail
       
-      echo "🔧 Advanced Android build dependency installation..."
-      
-      # Function for retry logic
-      retry_command() {
-        local max_attempts=3
-        local delay=5
-        local command="$1"
-        local attempt=1
-        
-        until [ $attempt -gt $max_attempts ]; do
-          echo "Attempt $attempt/$max_attempts: $command"
-          if eval "$command"; then
-            return 0
-          else
-            echo "Command failed, retrying in ${delay}s..."
-            sleep $delay
-            delay=$((delay * 2))
-            attempt=$((attempt + 1))
-          fi
-        done
-        
-        echo "❌ Command failed after $max_attempts attempts: $command"
-        return 1
-      }
+      echo "🔧 Enterprise Android build dependency installation..."
       
       # Create installation log
       mkdir -p logs
       INSTALL_LOG="logs/dependency-install.log"
       
-      {
-        echo "=== DEPENDENCY INSTALLATION LOG ==="
-        echo "Started: $(date)"
-        echo "Host: $(hostname)"
-        echo "User: $(whoami)"
-        echo "Working Directory: $(pwd)"
-        echo ""
-      } > "$INSTALL_LOG"
+      # Function for intelligent retry logic
+      retry_command() {
+        local max_attempts=5
+        local delay=10
+        local command="$$1"
+        local attempt=1
+        
+        until [ $$attempt -gt $$max_attempts ]; do
+          echo "🔄 Attempt $$attempt/$$max_attempts: $$command"
+          if eval "$$command"; then
+            echo "✅ Command succeeded: $$command"
+            return 0
+          else
+            echo "❌ Command failed, retrying in $${delay}s..."
+            sleep $$delay
+            delay=$$((delay * 2))
+            attempt=$$((attempt + 1))
+          fi
+        done
+        
+        echo "💥 Command failed after $$max_attempts attempts: $$command"
+        return 1
+      }
       
-      # Check if we're on a supported OS
+      # Log installation start
+      {
+        echo "=== ENTERPRISE DEPENDENCY INSTALLATION ==="
+        echo "Started: $$(date -Iseconds)"
+        echo "Host: $$(hostname)"
+        echo "User: $$(whoami)"
+        echo "Working Directory: $$(pwd)"
+        echo ""
+      } > "$$INSTALL_LOG"
+      
+      # Validate OS compatibility
       if ! command -v apt-get &> /dev/null; then
         echo "❌ This pipeline requires Ubuntu/Debian with apt-get"
         exit 1
       fi
       
       # Update package lists with retry
-      echo "📦 Updating package lists..."
-      retry_command "sudo apt-get update" 2>&1 | tee -a "$INSTALL_LOG"
+      echo "📦 Updating package repositories..."
+      retry_command "sudo apt-get update -qq" 2>&1 | tee -a "$$INSTALL_LOG"
       
-      # Install essential packages
-      echo "🔨 Installing Android build dependencies..."
+      # Install core dependencies in optimized batches
+      echo "🛠️ Installing Android build dependencies..."
       
-      PACKAGES=(
-        # Core tools
+      # Core system tools
+      CORE_PACKAGES=(
         "git" "curl" "wget" "python3" "python3-pip" "python-is-python3"
-        
-        # Java development
-        "openjdk-8-jdk" "openjdk-11-jdk"
-        
-        # Build tools
-        "build-essential" "libc6-dev" "libssl-dev"
-        
-        # Android specific
-        "libncurses5" "libncurses5-dev" "lib32ncurses5-dev"
-        "libreadline-dev" "lib32readline-dev" "libtinfo5"
-        "libxml2-utils" "xsltproc" "zip" "zlib1g-dev" "lib32z1-dev"
-        
-        # Multilib support
-        "g++-multilib" "gcc-multilib"
-        
-        # Build optimization
-        "ccache" "schedtool"
-        
-        # Additional tools
-        "bison" "flex" "bc" "rsync" "squashfs-tools"
-        "python3-mako" "libffi-dev"
-        
-        # System monitoring
-        "htop" "iotop" "tree"
+        "build-essential" "libc6-dev" "libssl-dev" "pkg-config"
       )
       
-      # Install packages in batches to avoid timeouts
-      BATCH_SIZE=10
-      for ((i=0; i<${#PACKAGES[@]}; i+=BATCH_SIZE)); do
-        BATCH=("${PACKAGES[@]:i:BATCH_SIZE}")
-        echo "Installing batch $((i/BATCH_SIZE + 1)): ${BATCH[*]}"
-        
-        retry_command "sudo apt-get install -y ${BATCH[*]}" 2>&1 | tee -a "$INSTALL_LOG"
+      # Java development environment
+      JAVA_PACKAGES=(
+        "openjdk-8-jdk" "openjdk-11-jdk" "openjdk-17-jdk"
+      )
+      
+      # Android-specific libraries
+      ANDROID_PACKAGES=(
+        "libncurses5" "libncurses5-dev" "lib32ncurses5-dev"
+        "libreadline-dev" "lib32readline-dev" "libtinfo5"
+        "libxml2-utils" "xsltproc" "zip" "unzip"
+        "zlib1g-dev" "lib32z1-dev" "liblz4-tool"
+      )
+      
+      # Build optimization tools
+      BUILD_PACKAGES=(
+        "ccache" "schedtool" "bc" "bison" "flex"
+        "g++-multilib" "gcc-multilib" "rsync"
+        "squashfs-tools" "python3-mako" "libffi-dev"
+      )
+      
+      # Install packages in batches
+      for package_set in "CORE_PACKAGES[@]" "JAVA_PACKAGES[@]" "ANDROID_PACKAGES[@]" "BUILD_PACKAGES[@]"; do
+        eval "packages=(\$${package_set})"
+        echo "📥 Installing package set: $${packages[*]}"
+        retry_command "sudo apt-get install -y $${packages[*]}" 2>&1 | tee -a "$$INSTALL_LOG"
       done
       
-      # Configure Java environment
+      # Configure Java environment for Android builds
       echo "☕ Configuring Java environment..."
-      {
-        echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64"
-        echo "export PATH=\$JAVA_HOME/bin:\$PATH"
-      } >> ~/.bashrc
-      
       export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
-      export PATH=$JAVA_HOME/bin:$PATH
+      export PATH=$$JAVA_HOME/bin:$$PATH
       
       # Install repo tool with verification
-      echo "🔄 Installing repo tool..."
+      echo "🔄 Installing Google repo tool..."
       REPO_URL="https://storage.googleapis.com/git-repo-downloads/repo"
       
-      retry_command "curl -o /tmp/repo '$REPO_URL'" 2>&1 | tee -a "$INSTALL_LOG"
+      retry_command "curl -o /tmp/repo '$$REPO_URL'" 2>&1 | tee -a "$$INSTALL_LOG"
       
       # Verify repo download
       if [ ! -f /tmp/repo ] || [ ! -s /tmp/repo ]; then
@@ -216,1210 +275,781 @@ steps:
         exit 1
       fi
       
-      echo "✅ Repo tool installed: $(repo --version)"
+      echo "✅ Repo tool installed: $$(repo --version | head -1)"
       
-      # Set up ccache
-      echo "🚀 Configuring ccache..."
+      # Configure ccache for build acceleration
+      echo "🚀 Configuring ccache for optimal performance..."
       export USE_CCACHE=1
-      export CCACHE_DIR="${HOME}/.ccache"
-      mkdir -p "$CCACHE_DIR"
-      ccache -M 100G
+      export CCACHE_DIR="$$HOME/.ccache"
+      mkdir -p "$$CCACHE_DIR"
+      ccache -M $$CCACHE_SIZE
       ccache -s
       
-      # Configure git for repo
-      echo "🔧 Configuring git..."
-      git config --global user.email "${GIT_EMAIL:-buildbot@buildkite.local}"
-      git config --global user.name "${GIT_NAME:-Buildkite Android Builder}"
+      # Configure git for repo operations
+      echo "🔧 Configuring git environment..."
+      git config --global user.email "$${GIT_EMAIL:-android-builder@buildkite.local}"
+      git config --global user.name "$${GIT_NAME:-Buildkite Android Builder}"
       git config --global color.ui auto
+      git config --global init.defaultBranch main
       
-      # Final verification
-      echo "🧪 Verifying installation..."
+      # Generate installation verification report
       {
         echo "=== INSTALLATION VERIFICATION ==="
-        echo "Java: $(java -version 2>&1 | head -1)"
-        echo "Python: $(python3 --version)"
-        echo "Git: $(git --version)"
-        echo "Repo: $(repo --version)"
-        echo "Make: $(make --version | head -1)"
-        echo "GCC: $(gcc --version | head -1)"
-        echo "Ccache: $(ccache --version | head -1)"
-        echo "Ccache config: $(ccache -s)"
-        echo "Completed: $(date)"
-      } | tee -a "$INSTALL_LOG"
+        echo "Java: $$(java -version 2>&1 | head -1)"
+        echo "Python: $$(python3 --version)"
+        echo "Git: $$(git --version)"
+        echo "Repo: $$(repo --version | head -1)"
+        echo "Make: $$(make --version | head -1)"
+        echo "GCC: $$(gcc --version | head -1)"
+        echo "Ccache: $$(ccache --version | head -1)"
+        echo "Ccache stats: $$(ccache -s | grep 'cache size')"
+        echo "Completed: $$(date -Iseconds)"
+      } | tee -a "$$INSTALL_LOG"
       
-      echo "✅ All dependencies installed and verified!"
-      
-      # Upload installation log
-      buildkite-agent artifact upload "$INSTALL_LOG"
-    agents:
-      queue: "default"
-    timeout_in_minutes: 30
-    retry:
-      automatic:
-        - exit_status: "*"
-          limit: 2
-    env:
-      GIT_EMAIL: "buildbot@buildkite.local"
-      GIT_NAME: "Buildkite Android Builder"
-
-  - label: ":octocat: Smart Source Repository Initialization"
-    key: "init-source"
-    depends_on: "install-deps"
-    command: |
-      set -euo pipefail
-      
-      echo "🧠 Smart Android source repository initialization..."
-      
-      # Configuration with validation
-      MANIFEST_URL="${MANIFEST_URL:-https://github.com/LineageOS/android.git}"
-      MANIFEST_BRANCH="${MANIFEST_BRANCH:-lineage-21.0}"
-      MANIFEST_NAME="${MANIFEST_NAME:-default.xml}"
-      
-      # Create detailed log
-      mkdir -p logs
-      INIT_LOG="logs/source-init.log"
-      
+      # Create verification report in JSON
       {
-        echo "=== SOURCE INITIALIZATION LOG ==="
-        echo "Started: $(date)"
-        echo "Manifest URL: $MANIFEST_URL"
-        echo "Branch: $MANIFEST_BRANCH"
-        echo "Manifest: $MANIFEST_NAME"
-        echo ""
-      } > "$INIT_LOG"
-      
-      # Validate manifest URL accessibility
-      echo "🔍 Validating manifest accessibility..." | tee -a "$INIT_LOG"
-      
-      if ! curl -s --head --fail "$MANIFEST_URL" >/dev/null 2>&1; then
-        echo "⚠️ Direct URL check failed, trying git ls-remote..." | tee -a "$INIT_LOG"
-        if ! git ls-remote "$MANIFEST_URL" >/dev/null 2>&1; then
-          echo "❌ Manifest URL is not accessible: $MANIFEST_URL" | tee -a "$INIT_LOG"
-          echo "Available alternatives:" | tee -a "$INIT_LOG"
-          echo "  - LineageOS: https://github.com/LineageOS/android.git" | tee -a "$INIT_LOG"
-          echo "  - AOSP: https://android.googlesource.com/platform/manifest" | tee -a "$INIT_LOG"
-          exit 1
-        fi
-      fi
-      
-      echo "✅ Manifest URL validated" | tee -a "$INIT_LOG"
-      
-      # Create source directory with proper permissions
-      SOURCE_DIR="android-source"
-      echo "📁 Setting up source directory: $SOURCE_DIR" | tee -a "$INIT_LOG"
-      
-      if [ -d "$SOURCE_DIR" ]; then
-        echo "📂 Source directory exists, checking state..." | tee -a "$INIT_LOG"
-        cd "$SOURCE_DIR"
-        
-        if [ -d ".repo" ]; then
-          echo "🔍 Existing .repo found, validating..." | tee -a "$INIT_LOG"
-          
-          # Check if repo is corrupted
-          if ! repo info >/dev/null 2>&1; then
-            echo "⚠️ Corrupted .repo detected, reinitializing..." | tee -a "$INIT_LOG"
-            rm -rf .repo
-          else
-            # Check if manifest URL matches
-            CURRENT_URL=$(repo manifest | grep -o 'remote="[^"]*"' | head -1 | cut -d'"' -f2 || echo "unknown")
-            if [[ "$CURRENT_URL" != *"$(basename "$MANIFEST_URL" .git)"* ]]; then
-              echo "⚠️ Manifest URL mismatch, reinitializing..." | tee -a "$INIT_LOG"
-              echo "Current: $CURRENT_URL" | tee -a "$INIT_LOG"
-              echo "Expected: $MANIFEST_URL" | tee -a "$INIT_LOG"
-              rm -rf .repo
-            fi
-          fi
-        fi
-      else
-        mkdir -p "$SOURCE_DIR"
-        cd "$SOURCE_DIR"
-      fi
-      
-      # Initialize repository if needed
-      if [ ! -d ".repo" ]; then
-        echo "🔄 Initializing fresh repository..." | tee -a "../$INIT_LOG"
-        
-        # Advanced repo init with error handling
-        REPO_INIT_CMD="repo init"
-        REPO_INIT_CMD="$REPO_INIT_CMD -u '$MANIFEST_URL'"
-        REPO_INIT_CMD="$REPO_INIT_CMD -b '$MANIFEST_BRANCH'"
-        REPO_INIT_CMD="$REPO_INIT_CMD -m '$MANIFEST_NAME'"
-        REPO_INIT_CMD="$REPO_INIT_CMD --depth=1"
-        REPO_INIT_CMD="$REPO_INIT_CMD --no-clone-bundle"
-        REPO_INIT_CMD="$REPO_INIT_CMD --current-branch"
-        
-        echo "Executing: $REPO_INIT_CMD" | tee -a "../$INIT_LOG"
-        
-        # Retry mechanism for repo init
-        for attempt in 1 2 3; do
-          echo "Repository initialization attempt $attempt/3..." | tee -a "../$INIT_LOG"
-          
-          if eval "$REPO_INIT_CMD" 2>&1 | tee -a "../$INIT_LOG"; then
-            echo "✅ Repository initialized successfully!" | tee -a "../$INIT_LOG"
-            break
-          else
-            if [ $attempt -eq 3 ]; then
-              echo "❌ Repository initialization failed after 3 attempts" | tee -a "../$INIT_LOG"
-              exit 1
-            fi
-            echo "⚠️ Attempt $attempt failed, retrying in 10s..." | tee -a "../$INIT_LOG"
-            sleep 10
-            
-            # Clean up for retry
-            rm -rf .repo
-          fi
-        done
-      else
-        echo "📁 Repository already initialized, validating..." | tee -a "../$INIT_LOG"
-      fi
-      
-      # Validate repository state
-      echo "🧪 Validating repository state..." | tee -a "../$INIT_LOG"
-      
-      if ! repo info >/dev/null 2>&1; then
-        echo "❌ Repository validation failed" | tee -a "../$INIT_LOG"
-        exit 1
-      fi
-      
-      # Repository information
-      {
-        echo "=== REPOSITORY INFORMATION ==="
-        echo "Manifest URL: $(repo manifest | grep -o 'remote="[^"]*"' | head -1 || echo 'unknown')"
-        echo "Current branch: $(repo info | grep 'Current revision:' | head -1 || echo 'unknown')"
-        echo "Repository count: $(find .repo/projects -name "*.git" | wc -l 2>/dev/null || echo 'unknown')"
-        echo "Repository size: $(du -sh .repo 2>/dev/null | cut -f1 || echo 'unknown')"
-        echo "Initialized: $(date)"
-      } | tee -a "../$INIT_LOG"
-      
-      echo "✅ Source repository initialization complete!" | tee -a "../$INIT_LOG"
-      
-      # Upload initialization log
-      cd ..
-      buildkite-agent artifact upload "$INIT_LOG"
-    agents:
-      queue: "default"
-    timeout_in_minutes: 15
-    retry:
-      automatic:
-        - exit_status: "*"
-          limit: 2
-    env:
-      MANIFEST_URL: "https://github.com/LineageOS/android.git"
-      MANIFEST_BRANCH: "lineage-21.0"
-      MANIFEST_NAME: "default.xml"
-
-  - label: ":arrows_counterclockwise: Advanced Source Synchronization"
-    key: "sync-source"
-    depends_on: "init-source"
-    command: |
-      set -euo pipefail
-      
-      echo "🚀 Advanced Android source synchronization with smart recovery..."
-      
-      cd android-source
-      
-      # Configuration
-      MAX_JOBS=$(nproc)
-      SYNC_JOBS=${SYNC_JOBS:-$MAX_JOBS}
-      MAX_RETRIES=5
-      NETWORK_TIMEOUT=300
-      
-      # Create comprehensive sync log
-      mkdir -p ../logs
-      SYNC_LOG="../logs/source-sync.log"
-      
-      {
-        echo "=== SOURCE SYNCHRONIZATION LOG ==="
-        echo "Started: $(date)"
-        echo "Sync jobs: $SYNC_JOBS (max: $MAX_JOBS)"
-        echo "Max retries: $MAX_RETRIES"
-        echo "Network timeout: ${NETWORK_TIMEOUT}s"
-        echo ""
-      } > "$SYNC_LOG"
-      
-      # Function to check network connectivity
-      check_network() {
-        echo "🌐 Checking network connectivity..." | tee -a "$SYNC_LOG"
-        
-        local test_urls=(
-          "https://github.com"
-          "https://android.googlesource.com"
-          "https://source.android.com"
-        )
-        
-        for url in "${test_urls[@]}"; do
-          if curl -s --max-time 10 --head "$url" >/dev/null 2>&1; then
-            echo "✅ Network OK: $url" | tee -a "$SYNC_LOG"
-            return 0
-          else
-            echo "⚠️ Network issue: $url" | tee -a "$SYNC_LOG"
-          fi
-        done
-        
-        echo "❌ Network connectivity issues detected" | tee -a "$SYNC_LOG"
-        return 1
-      }
-      
-      # Function to monitor sync progress
-      monitor_sync_progress() {
-        local sync_pid=$1
-        local start_time=$(date +%s)
-        local last_update_time=$start_time
-        local last_size=0
-        
-        while kill -0 $sync_pid 2>/dev/null; do
-          sleep 30
-          
-          local current_time=$(date +%s)
-          local current_size=$(du -sb . 2>/dev/null | cut -f1 || echo "0")
-          local elapsed=$((current_time - start_time))
-          local since_update=$((current_time - last_update_time))
-          
-          # Calculate transfer rate
-          local size_diff=$((current_size - last_size))
-          local rate_bps=$((size_diff / 30))
-          local rate_mbps=$((rate_bps / 1024 / 1024))
-          
-          echo "📊 Sync progress: ${elapsed}s elapsed, ${current_size} bytes, ${rate_mbps}MB/s" | tee -a "$SYNC_LOG"
-          
-          # Check for stalled sync (no progress for 10 minutes)
-          if [ $since_update -gt 600 ] && [ $size_diff -eq 0 ]; then
-            echo "⚠️ Sync appears stalled, will restart if process exits" | tee -a "$SYNC_LOG"
-          fi
-          
-          last_size=$current_size
-          last_update_time=$current_time
-        done
-      }
-      
-      # Function to perform smart sync with recovery
-      smart_sync() {
-        local attempt=1
-        local base_delay=30
-        
-        while [ $attempt -le $MAX_RETRIES ]; do
-          echo "🔄 Sync attempt $attempt/$MAX_RETRIES..." | tee -a "$SYNC_LOG"
-          
-          # Check network before attempting sync
-          if ! check_network; then
-            echo "⚠️ Network issues detected, waiting before retry..." | tee -a "$SYNC_LOG"
-            sleep $((base_delay * attempt))
-            attempt=$((attempt + 1))
-            continue
-          fi
-          
-          # Determine sync strategy based on attempt
-          local sync_cmd="repo sync"
-          
-          if [ $attempt -eq 1 ]; then
-            # First attempt: full featured sync
-            sync_cmd="$sync_cmd -c -j$SYNC_JOBS --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune"
-          elif [ $attempt -eq 2 ]; then
-            # Second attempt: reduce parallelism
-            local reduced_jobs=$((SYNC_JOBS / 2))
-            [ $reduced_jobs -lt 1 ] && reduced_jobs=1
-            sync_cmd="$sync_cmd -c -j$reduced_jobs --force-sync --no-clone-bundle --no-tags"
-          else
-            # Subsequent attempts: minimal parallelism, more conservative
-            sync_cmd="$sync_cmd -c -j1 --force-sync --no-clone-bundle"
-          fi
-          
-          echo "Executing: $sync_cmd" | tee -a "$SYNC_LOG"
-          
-          # Start sync in background and monitor
-          timeout $NETWORK_TIMEOUT bash -c "$sync_cmd" 2>&1 | tee -a "$SYNC_LOG" &
-          local sync_pid=$!
-          
-          # Monitor progress in background
-          monitor_sync_progress $sync_pid &
-          local monitor_pid=$!
-          
-          # Wait for sync to complete
-          if wait $sync_pid; then
-            # Kill monitor
-            kill $monitor_pid 2>/dev/null || true
-            wait $monitor_pid 2>/dev/null || true
-            
-            echo "✅ Sync completed successfully on attempt $attempt!" | tee -a "$SYNC_LOG"
-            return 0
-          else
-            local exit_code=$?
-            
-            # Kill monitor
-            kill $monitor_pid 2>/dev/null || true
-            wait $monitor_pid 2>/dev/null || true
-            
-            echo "❌ Sync failed on attempt $attempt (exit code: $exit_code)" | tee -a "$SYNC_LOG"
-            
-            # Analyze failure and clean up if necessary
-            if [ $exit_code -eq 124 ]; then
-              echo "⏰ Sync timed out after ${NETWORK_TIMEOUT}s" | tee -a "$SYNC_LOG"
-            fi
-            
-            # Check for corrupted repositories and clean them
-            echo "🔍 Checking for corrupted repositories..." | tee -a "$SYNC_LOG"
-            if repo status | grep -q "error\|fatal\|corrupt"; then
-              echo "⚠️ Corrupted repositories detected, cleaning..." | tee -a "$SYNC_LOG"
-              repo forall -c 'git reset --hard HEAD; git clean -fdx' 2>&1 | tee -a "$SYNC_LOG" || true
-            fi
-            
-            if [ $attempt -eq $MAX_RETRIES ]; then
-              echo "💥 All sync attempts failed!" | tee -a "$SYNC_LOG"
-              return 1
-            fi
-            
-            # Progressive backoff delay
-            local delay=$((base_delay * attempt))
-            echo "⏱️ Waiting ${delay}s before retry..." | tee -a "$SYNC_LOG"
-            sleep $delay
-            
-            attempt=$((attempt + 1))
-          fi
-        done
-      }
-      
-      # Pre-sync validation
-      echo "🧪 Pre-sync validation..." | tee -a "$SYNC_LOG"
-      
-      if ! repo info >/dev/null 2>&1; then
-        echo "❌ Repository not properly initialized" | tee -a "$SYNC_LOG"
-        exit 1
-      fi
-      
-      # Check available disk space
-             local available_gb=$(df -BG . | awk 'NR==2 {print int($$4)}')
-      echo "💾 Available disk space: ${available_gb}GB" | tee -a "$SYNC_LOG"
-      
-      if [ $available_gb -lt 150 ]; then
-        echo "⚠️ Warning: Low disk space (${available_gb}GB < 150GB)" | tee -a "$SYNC_LOG"
-        echo "Sync may fail due to insufficient space" | tee -a "$SYNC_LOG"
-      fi
-      
-      # Record pre-sync state
-      {
-        echo "=== PRE-SYNC STATE ==="
-        echo "Repository count: $(find .repo/projects -name "*.git" | wc -l 2>/dev/null || echo 'unknown')"
-        echo "Current size: $(du -sh . 2>/dev/null | cut -f1 || echo 'unknown')"
-        echo "Available space: ${available_gb}GB"
-        echo ""
-      } | tee -a "$SYNC_LOG"
-      
-      # Perform smart sync
-      local sync_start_time=$(date +%s)
-      
-      if smart_sync; then
-        local sync_end_time=$(date +%s)
-        local sync_duration=$((sync_end_time - sync_start_time))
-        
-        # Post-sync validation and statistics
-        echo "📊 Post-sync analysis..." | tee -a "$SYNC_LOG"
-        
-        {
-          echo "=== SYNC RESULTS ==="
-          echo "Status: SUCCESS"
-          echo "Duration: $(date -u -d @$sync_duration +%H:%M:%S)"
-          echo "Final size: $(du -sh . 2>/dev/null | cut -f1 || echo 'unknown')"
-          echo "Repository count: $(find .repo/projects -name "*.git" | wc -l 2>/dev/null || echo 'unknown')"
-          echo "Completed: $(date)"
-          echo ""
-          
-          echo "=== PROJECT STATUS ==="
-          repo status | head -20 || echo "Status check failed"
-          echo ""
-          
-          echo "=== SYNC STATISTICS ==="
-          echo "Jobs used: $SYNC_JOBS"
-          echo "Average speed: $(echo "scale=2; $(du -sb . | cut -f1) / $sync_duration / 1024 / 1024" | bc 2>/dev/null || echo "unknown") MB/s"
-          
-        } | tee -a "$SYNC_LOG"
-        
-        echo "✅ Source synchronization completed successfully!" | tee -a "$SYNC_LOG"
-      else
-        echo "💥 Source synchronization failed after all retry attempts" | tee -a "$SYNC_LOG"
-        
-        # Upload failure logs for debugging
-        cd ..
-        buildkite-agent artifact upload "$SYNC_LOG"
-        exit 1
-      fi
-      
-      # Upload sync log
-      cd ..
-      buildkite-agent artifact upload "$SYNC_LOG"
-    agents:
-      queue: "default"
-    timeout_in_minutes: 180
-    retry:
-      automatic:
-        - exit_status: "*"
-          limit: 1
-    env:
-      SYNC_JOBS: "8"
-
-  - label: ":hammer_and_wrench: Enterprise Android ROM Build"
-    key: "build-rom"
-    depends_on: "sync-source"
-    command: |
-      set -euo pipefail
-      
-      echo "🏗️ Enterprise-grade Android ROM build with advanced monitoring..."
-      
-      cd android-source
-      
-      # Build configuration with validation
-      TARGET_DEVICE="${TARGET_DEVICE:-generic}"
-      BUILD_TYPE="${BUILD_TYPE:-userdebug}"
-      BUILD_VARIANT="${BUILD_VARIANT:-lineage}"
-      BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
-      
-      # Create comprehensive build log
-      mkdir -p ../logs
-      BUILD_LOG="../logs/rom-build.log"
-      
-      {
-        echo "=== ANDROID ROM BUILD LOG ==="
-        echo "Started: $(date)"
-        echo "Device: $TARGET_DEVICE"
-        echo "Type: $BUILD_TYPE"
-        echo "Variant: $BUILD_VARIANT"
-        echo "Jobs: $BUILD_JOBS"
-        echo "Host: $(hostname)"
-        echo ""
-      } > "$BUILD_LOG"
-      
-      # Resource monitoring function
-      monitor_resources() {
-        local build_pid=$1
-        local monitor_interval=60
-        local resource_log="../logs/resource-usage.log"
-        
-        echo "=== RESOURCE MONITORING LOG ===" > "$resource_log"
-        
-        while kill -0 $build_pid 2>/dev/null; do
-          {
-            echo "Timestamp: $(date)"
-                       echo "CPU Usage: $(top -bn1 | grep "Cpu(s)" | awk '{print $$2}' | cut -d'%' -f1)%"
-           echo "Memory: $(free -h | awk '/^Mem:/ {printf "Used: %s/%s (%.1f%%)\n", $$3, $$2, $$3/$$2*100}')"
-           echo "Disk: $(df -h . | awk 'NR==2 {printf "Used: %s/%s (%s)\n", $$3, $$2, $$5}')"
-           echo "Load Average: $(uptime | awk -F'load average:' '{print $$2}')"
-            echo "Active processes: $(ps aux | wc -l)"
-            echo "Ccache stats: $(ccache -s | grep "cache hit rate" || echo "N/A")"
-            echo "Build output size: $(du -sh ../out 2>/dev/null | cut -f1 || echo "N/A")"
-            echo "---"
-          } >> "$resource_log"
-          
-          # Check for resource exhaustion
-                     local mem_usage=$(free | awk '/^Mem:/ {printf "%.1f", $$3/$$2*100}')
-           local disk_usage=$(df . | awk 'NR==2 {print $$5}' | sed 's/%//')
-          
-          if (( $(echo "$mem_usage > 95" | bc -l) )); then
-            echo "🚨 CRITICAL: Memory usage critical ($mem_usage%)" | tee -a "$BUILD_LOG"
-          fi
-          
-          if [ "$disk_usage" -gt 90 ]; then
-            echo "🚨 CRITICAL: Disk usage critical ($disk_usage%)" | tee -a "$BUILD_LOG"
-          fi
-          
-          sleep $monitor_interval
-        done
-        
-        buildkite-agent artifact upload "$resource_log" || true
-      }
-      
-      # Build environment validation
-      echo "🧪 Validating build environment..." | tee -a "$BUILD_LOG"
-      
-      # Check Java version
-             JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $$2}')
-       echo "Java version: $JAVA_VERSION" | tee -a "$BUILD_LOG"
-      
-      # Validate build tools
-      if ! command -v make &> /dev/null; then
-        echo "❌ Make not found" | tee -a "$BUILD_LOG"
-        exit 1
-      fi
-      
-      # Check available memory
-             AVAILABLE_MEM_GB=$(free -g | awk '/^Mem:/ {print $$7}')
-      if [ "$AVAILABLE_MEM_GB" -lt 8 ]; then
-        echo "⚠️ Low available memory: ${AVAILABLE_MEM_GB}GB" | tee -a "$BUILD_LOG"
-        # Reduce build jobs if memory is low
-        BUILD_JOBS=$((BUILD_JOBS / 2))
-        [ $BUILD_JOBS -lt 1 ] && BUILD_JOBS=1
-        echo "Reduced build jobs to: $BUILD_JOBS" | tee -a "$BUILD_LOG"
-      fi
-      
-      # Validate source integrity
-      echo "🔍 Validating source code integrity..." | tee -a "$BUILD_LOG"
-      
-      if ! repo status >/dev/null 2>&1; then
-        echo "❌ Source code integrity check failed" | tee -a "$BUILD_LOG"
-        exit 1
-      fi
-      
-      # Set up advanced build environment
-      echo "⚙️ Configuring advanced build environment..." | tee -a "$BUILD_LOG"
-      
-      # Source build environment
-      if ! source build/envsetup.sh 2>&1 | tee -a "$BUILD_LOG"; then
-        echo "❌ Failed to source build environment" | tee -a "$BUILD_LOG"
-        exit 1
-      fi
-      
-      # Configure ccache with optimization
-      export USE_CCACHE=1
-      export CCACHE_DIR=$PWD/../ccache
-      export CCACHE_COMPRESS=1
-      export CCACHE_COMPRESSLEVEL=6
-      export CCACHE_MAXSIZE=100G
-      export CCACHE_SLOPPINESS=time_macros,include_file_mtime,include_file_ctime,file_macro
-      
-      mkdir -p "$CCACHE_DIR"
-      ccache -M "$CCACHE_MAXSIZE"
-      ccache -s | tee -a "$BUILD_LOG"
-      
-      # Device-specific validation
-      echo "📱 Device-specific validation for: $TARGET_DEVICE" | tee -a "$BUILD_LOG"
-      
-      # Check if device is supported
-      DEVICE_DIR="device/*/⊕{TARGET_DEVICE}"
-      if ! ls device/*/"$TARGET_DEVICE" >/dev/null 2>&1 && [ "$TARGET_DEVICE" != "generic" ]; then
-        echo "⚠️ Device $TARGET_DEVICE not found in device tree" | tee -a "$BUILD_LOG"
-        echo "Available devices:" | tee -a "$BUILD_LOG"
-        find device -mindepth 2 -maxdepth 2 -type d | head -20 | tee -a "$BUILD_LOG"
-        
-        if [ "${IGNORE_DEVICE_CHECK:-false}" != "true" ]; then
-          echo "❌ Set IGNORE_DEVICE_CHECK=true to bypass this check" | tee -a "$BUILD_LOG"
-          exit 1
-        fi
-      fi
-      
-      # Lunch command with validation
-      echo "🎯 Configuring build target..." | tee -a "$BUILD_LOG"
-      
-      LUNCH_COMBO="${BUILD_VARIANT}_${TARGET_DEVICE}-${BUILD_TYPE}"
-      echo "Lunch combo: $LUNCH_COMBO" | tee -a "$BUILD_LOG"
-      
-      if ! lunch "$LUNCH_COMBO" 2>&1 | tee -a "$BUILD_LOG"; then
-        echo "❌ Failed to configure build target: $LUNCH_COMBO" | tee -a "$BUILD_LOG"
-        echo "Available targets:" | tee -a "$BUILD_LOG"
-        lunch 2>&1 | grep -E "^[0-9]+\." | head -20 | tee -a "$BUILD_LOG" || true
-        exit 1
-      fi
-      
-      # Pre-build cleanup and optimization
-      echo "🧹 Pre-build optimization..." | tee -a "$BUILD_LOG"
-      
-      # Clean old builds if requested
-      if [ "${CLEAN_BUILD:-false}" = "true" ]; then
-        echo "Performing clean build..." | tee -a "$BUILD_LOG"
-        make clean 2>&1 | tee -a "$BUILD_LOG"
-      fi
-      
-      # Optimize build environment
-      export LC_ALL=C
-      export USE_NINJA=false  # Some builds are more stable without ninja
-      export KBUILD_BUILD_USER="buildkite"
-      export KBUILD_BUILD_HOST="$(hostname)"
-      
-      # Build execution with monitoring
-      echo "🚀 Starting ROM compilation..." | tee -a "$BUILD_LOG"
-      
-      BUILD_START_TIME=$(date +%s)
-      
-      # Determine build command based on variant
-      if [ "$BUILD_VARIANT" = "lineage" ]; then
-        BUILD_CMD="brunch $TARGET_DEVICE"
-      elif [ "$BUILD_VARIANT" = "aosp" ]; then
-        BUILD_CMD="make -j$BUILD_JOBS otapackage"
-      else
-        BUILD_CMD="make -j$BUILD_JOBS"
-      fi
-      
-      echo "Build command: $BUILD_CMD" | tee -a "$BUILD_LOG"
-      
-      # Execute build with monitoring
-      (
-        echo "Build started at: $(date)"
-        echo "Build command: $BUILD_CMD"
-        echo "Working directory: $(pwd)"
-        echo "Environment variables:"
-        env | grep -E "(TARGET_|BUILD_|CCACHE_|USE_)" | sort
-        echo "=== BUILD OUTPUT ==="
-      ) | tee -a "$BUILD_LOG"
-      
-      # Start build in background
-      $BUILD_CMD 2>&1 | tee -a "$BUILD_LOG" &
-      BUILD_PID=$!
-      
-      # Start resource monitoring
-      monitor_resources $BUILD_PID &
-      MONITOR_PID=$!
-      
-      # Wait for build to complete with timeout handling
-      BUILD_SUCCESS=false
-      if wait $BUILD_PID; then
-        BUILD_SUCCESS=true
-        echo "✅ Build process completed successfully" | tee -a "$BUILD_LOG"
-      else
-        BUILD_EXIT_CODE=$?
-        echo "❌ Build process failed with exit code: $BUILD_EXIT_CODE" | tee -a "$BUILD_LOG"
-      fi
-      
-      # Stop monitoring
-      kill $MONITOR_PID 2>/dev/null || true
-      wait $MONITOR_PID 2>/dev/null || true
-      
-      BUILD_END_TIME=$(date +%s)
-      BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
-      
-      # Post-build analysis
-      echo "📊 Post-build analysis..." | tee -a "$BUILD_LOG"
-      
-      {
-        echo "=== BUILD RESULTS ==="
-        echo "Status: $([ "$BUILD_SUCCESS" = true ] && echo "SUCCESS" || echo "FAILED")"
-        echo "Duration: $(date -u -d @$BUILD_DURATION +%H:%M:%S)"
-        echo "Start time: $(date -d @$BUILD_START_TIME)"
-        echo "End time: $(date -d @$BUILD_END_TIME)"
-        echo "Final ccache stats:"
-        ccache -s
-        echo ""
-        
-        if [ "$BUILD_SUCCESS" = true ]; then
-          echo "=== BUILD ARTIFACTS ==="
-          OUT_DIR="out/target/product/$TARGET_DEVICE"
-          if [ -d "$OUT_DIR" ]; then
-            echo "Output directory: $OUT_DIR"
-            echo "Artifacts found:"
-            find "$OUT_DIR" -name "*.zip" -o -name "*.img" | head -10 || echo "No artifacts found"
-            echo "Total output size: $(du -sh out 2>/dev/null | cut -f1 || echo "unknown")"
-          fi
-        else
-          echo "=== BUILD FAILURE ANALYSIS ==="
-          echo "Last 50 lines of build log:"
-          tail -50 "$BUILD_LOG" | grep -E "(error|Error|ERROR|fail|Fail|FAIL)" || echo "No obvious errors in tail"
-        fi
-        
-      } | tee -a "$BUILD_LOG"
-      
-      # Upload build logs
-      cd ..
-      buildkite-agent artifact upload "$BUILD_LOG"
-      
-      if [ "$BUILD_SUCCESS" != true ]; then
-        echo "💥 ROM build failed - check build logs for details"
-        exit 1
-      fi
-      
-      echo "🎉 ROM build completed successfully!"
-    agents:
-      queue: "default"
-    timeout_in_minutes: 600
-    retry:
-      automatic:
-        - exit_status: "*"
-          limit: 1
-    env:
-      TARGET_DEVICE: "generic"
-      BUILD_TYPE: "userdebug" 
-      BUILD_VARIANT: "lineage"
-      BUILD_JOBS: "8"
-      USE_CCACHE: "1"
-      CLEAN_BUILD: "false"
-      IGNORE_DEVICE_CHECK: "false"
-
-  - label: ":package: Advanced ROM Artifact Management"
-    key: "package-rom"
-    depends_on: "build-rom"
-    command: |
-      set -euo pipefail
-      
-      echo "📦 Advanced ROM artifact packaging and validation..."
-      
-      TARGET_DEVICE="${TARGET_DEVICE:-generic}"
-      BUILD_TYPE="${BUILD_TYPE:-userdebug}"
-      BUILD_VARIANT="${BUILD_VARIANT:-lineage}"
-      OUT_DIR="android-source/out/target/product/$TARGET_DEVICE"
-      
-      # Create comprehensive packaging log
-      mkdir -p logs
-      PACKAGE_LOG="logs/packaging.log"
-      
-      {
-        echo "=== ROM ARTIFACT PACKAGING LOG ==="
-        echo "Started: $(date)"
-        echo "Device: $TARGET_DEVICE"
-        echo "Build Type: $BUILD_TYPE"
-        echo "Variant: $BUILD_VARIANT"
-        echo "Output Directory: $OUT_DIR"
-        echo ""
-      } > "$PACKAGE_LOG"
-      
-      # Validate build output directory
-      if [ ! -d "$OUT_DIR" ]; then
-        echo "❌ Build output directory not found: $OUT_DIR" | tee -a "$PACKAGE_LOG"
-        echo "Available directories:" | tee -a "$PACKAGE_LOG"
-        find android-source/out -type d -name "product" 2>/dev/null | tee -a "$PACKAGE_LOG" || echo "No product directories found"
-        exit 1
-      fi
-      
-      echo "✅ Build output directory validated" | tee -a "$PACKAGE_LOG"
-      
-      # Create artifacts directory with proper structure
-      ARTIFACTS_DIR="artifacts"
-      mkdir -p "$ARTIFACTS_DIR"/{roms,images,recovery,logs,tools}
-      
-      echo "📊 Analyzing build output..." | tee -a "$PACKAGE_LOG"
-      
-      # Comprehensive artifact discovery
-      {
-        echo "=== BUILD OUTPUT ANALYSIS ==="
-        echo "Output directory size: $(du -sh "$OUT_DIR" 2>/dev/null | cut -f1 || echo "unknown")"
-        echo "File count: $(find "$OUT_DIR" -type f | wc -l)"
-        echo ""
-        
-        echo "=== ROM FILES ==="
-        find "$OUT_DIR" -name "*.zip" -type f -exec ls -lh {} \; 2>/dev/null || echo "No ROM zip files found"
-        echo ""
-        
-        echo "=== IMAGE FILES ==="
-        find "$OUT_DIR" -name "*.img" -type f -exec ls -lh {} \; 2>/dev/null | head -20 || echo "No image files found"
-        echo ""
-        
-        echo "=== OTHER ARTIFACTS ==="
-        find "$OUT_DIR" -name "*.json" -o -name "*.xml" -o -name "*.txt" -type f 2>/dev/null | head -10 || echo "No metadata files found"
-        
-      } | tee -a "$PACKAGE_LOG"
-      
-      # Smart artifact collection
-      echo "🔍 Collecting ROM artifacts..." | tee -a "$PACKAGE_LOG"
-      
-      ARTIFACTS_FOUND=0
-      
-      # ROM packages (flashable zips)
-      while IFS= read -r -d '' file; do
-        if [ -f "$file" ]; then
-          filename=$(basename "$file")
-          echo "📱 ROM Package: $filename ($(du -sh "$file" | cut -f1))" | tee -a "$PACKAGE_LOG"
-          cp "$file" "$ARTIFACTS_DIR/roms/"
-          ARTIFACTS_FOUND=$((ARTIFACTS_FOUND + 1))
-        fi
-      done < <(find "$OUT_DIR" -name "*.zip" -type f -print0 2>/dev/null || true)
-      
-      # Critical images
-      IMAGE_TYPES=("boot" "recovery" "system" "vendor" "userdata" "cache" "dtbo" "vbmeta")
-      
-      for img_type in "${IMAGE_TYPES[@]}"; do
-        while IFS= read -r -d '' file; do
-          if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            echo "💿 Image: $filename ($(du -sh "$file" | cut -f1))" | tee -a "$PACKAGE_LOG"
-            
-            if [[ "$img_type" == "recovery" ]]; then
-              cp "$file" "$ARTIFACTS_DIR/recovery/"
-            else
-              cp "$file" "$ARTIFACTS_DIR/images/"
-            fi
-            ARTIFACTS_FOUND=$((ARTIFACTS_FOUND + 1))
-          fi
-        done < <(find "$OUT_DIR" -name "${img_type}.img" -type f -print0 2>/dev/null || true)
-      done
-      
-      # Build metadata and logs
-      METADATA_FILES=("build.json" "build-info.json" "build.prop" "recovery.fstab")
-      
-      for meta_file in "${METADATA_FILES[@]}"; do
-        while IFS= read -r -d '' file; do
-          if [ -f "$file" ]; then
-            filename=$(basename "$file")
-            echo "📋 Metadata: $filename" | tee -a "$PACKAGE_LOG"
-            cp "$file" "$ARTIFACTS_DIR/logs/"
-            ARTIFACTS_FOUND=$((ARTIFACTS_FOUND + 1))
-          fi
-        done < <(find "$OUT_DIR" -name "$meta_file" -type f -print0 2>/dev/null || true)
-      done
-      
-      echo "📈 Total artifacts collected: $ARTIFACTS_FOUND" | tee -a "$PACKAGE_LOG"
-      
-      if [ $ARTIFACTS_FOUND -eq 0 ]; then
-        echo "⚠️ No artifacts found - this may indicate a build failure" | tee -a "$PACKAGE_LOG"
-        echo "Build directory contents:" | tee -a "$PACKAGE_LOG"
-        ls -la "$OUT_DIR" | tee -a "$PACKAGE_LOG" || true
-      fi
-      
-      # Generate comprehensive build information
-      echo "📝 Generating build metadata..." | tee -a "$PACKAGE_LOG"
-      
-      cat > "$ARTIFACTS_DIR/build-info.json" << EOF
-      {
-        "build_info": {
-          "build_number": "${BUILDKITE_BUILD_NUMBER:-unknown}",
-          "commit": "${BUILDKITE_COMMIT:-unknown}",
-          "branch": "${BUILDKITE_BRANCH:-unknown}",
-          "build_url": "${BUILDKITE_BUILD_URL:-unknown}",
-          "pipeline": "${BUILDKITE_PIPELINE_SLUG:-unknown}"
-        },
-        "device_info": {
-          "device": "$TARGET_DEVICE",
-          "build_type": "$BUILD_TYPE",
-          "variant": "$BUILD_VARIANT"
-        },
-        "build_metadata": {
-          "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-          "build_timestamp": $(date +%s),
-          "builder_host": "$(hostname)",
-          "builder_user": "$(whoami)",
-          "android_version": "$(grep -o "PLATFORM_VERSION.*" android-source/build/core/version_defaults.mk 2>/dev/null | head -1 || echo "unknown")"
-        },
-        "artifacts": {
-          "total_count": $ARTIFACTS_FOUND,
-          "rom_packages": $(find "$ARTIFACTS_DIR/roms" -name "*.zip" 2>/dev/null | wc -l),
-          "images": $(find "$ARTIFACTS_DIR/images" -name "*.img" 2>/dev/null | wc -l),
-          "recovery": $(find "$ARTIFACTS_DIR/recovery" -name "*.img" 2>/dev/null | wc -l)
-        },
-        "build_environment": {
-          "ccache_stats": "$(ccache -s 2>/dev/null | grep "cache hit rate" || echo "N/A")",
-          "java_version": "$(java -version 2>&1 | head -1 || echo "unknown")",
-          "build_tools": "$(make --version 2>&1 | head -1 || echo "unknown")"
-        }
-      }
-      EOF
-      
-      # Generate checksums with validation
-      echo "🔐 Generating and validating checksums..." | tee -a "$PACKAGE_LOG"
-      
-      find "$ARTIFACTS_DIR" -name "*.zip" -o -name "*.img" | while read -r file; do
-        if [ -f "$file" ]; then
-          echo "Checksumming: $(basename "$file")" | tee -a "$PACKAGE_LOG"
-          
-          # Generate multiple hash types for security
-          md5sum "$file" > "${file}.md5"
-          sha256sum "$file" > "${file}.sha256"
-          sha512sum "$file" > "${file}.sha512"
-          
-          # Validate checksums immediately
-          if md5sum -c "${file}.md5" >/dev/null 2>&1; then
-            echo "✅ MD5 checksum verified for $(basename "$file")" | tee -a "$PACKAGE_LOG"
-          else
-            echo "❌ MD5 checksum failed for $(basename "$file")" | tee -a "$PACKAGE_LOG"
-          fi
-        fi
-      done
-      
-      # Create installation instructions
-      cat > "$ARTIFACTS_DIR/INSTALLATION.md" << 'EOF'
-      # ROM Installation Instructions
-      
-      ## Prerequisites
-      - Unlocked bootloader
-      - Custom recovery (TWRP recommended)
-      - USB debugging enabled
-      - ADB and Fastboot tools installed
-      
-      ## Installation Steps
-      
-      ### Method 1: Recovery Flash (Recommended)
-      1. Download the ROM zip file from the artifacts
-      2. Boot into recovery mode
-      3. Wipe system, data, cache, and dalvik cache
-      4. Flash the ROM zip file
-      5. Flash GApps if desired
-      6. Reboot system
-      
-      ### Method 2: Fastboot Flash (Advanced)
-      1. Boot into fastboot mode
-      2. Flash individual image files:
-         ```bash
-         fastboot flash boot boot.img
-         fastboot flash system system.img
-         fastboot flash vendor vendor.img
-         fastboot flash recovery recovery.img
-         ```
-      3. Reboot system
-      
-      ## Verification
-      - Check build date in Settings > About Phone
-      - Verify ROM version matches build info
-      - Test basic functionality before daily use
-      
-      ## Support
-      - Check build logs if issues occur
-      - Verify checksums before flashing
-      - Create backup before installation
-      EOF
-      
-      # Final artifact summary
-      echo "📊 Final artifact summary..." | tee -a "$PACKAGE_LOG"
-      
-      {
-        echo "=== FINAL ARTIFACT SUMMARY ==="
-        echo "Packaging completed: $(date)"
-        echo ""
-        echo "Directory structure:"
-        find "$ARTIFACTS_DIR" -type f | sort | while read -r file; do
-          echo "  $(basename "$file") ($(du -sh "$file" | cut -f1))"
-        done
-        echo ""
-        echo "Total artifacts size: $(du -sh "$ARTIFACTS_DIR" | cut -f1)"
-        echo "Checksum files created: $(find "$ARTIFACTS_DIR" -name "*.md5" -o -name "*.sha*" | wc -l)"
-        
-      } | tee -a "$PACKAGE_LOG"
-      
-      # Validate final package
-      if [ $ARTIFACTS_FOUND -gt 0 ]; then
-        echo "✅ ROM artifact packaging completed successfully!" | tee -a "$PACKAGE_LOG"
-      else
-        echo "❌ ROM artifact packaging completed but no artifacts were found!" | tee -a "$PACKAGE_LOG"
-        exit 1
-      fi
-      
-      # Upload packaging log
-      buildkite-agent artifact upload "$PACKAGE_LOG"
+        echo "{"
+        echo "  \"timestamp\": \"$$(date -Iseconds)\","
+        echo "  \"java_version\": \"$$(java -version 2>&1 | head -1 | tr -d '\"')\","
+        echo "  \"python_version\": \"$$(python3 --version)\","
+        echo "  \"git_version\": \"$$(git --version)\","
+        echo "  \"repo_version\": \"$$(repo --version | head -1)\","
+        echo "  \"ccache_size\": \"$$CCACHE_SIZE\","
+        echo "  \"status\": \"success\""
+        echo "}"
+      } > logs/package-verification.json
+      
+      echo "✅ All enterprise dependencies installed and verified!"
+      
+      # Upload logs
+      buildkite-agent artifact upload "$$INSTALL_LOG"
+      buildkite-agent artifact upload "logs/package-verification.json"
     agents:
       queue: "default"
     timeout_in_minutes: 45
     retry:
       automatic:
         - exit_status: "*"
-          limit: 2
-    env:
-      TARGET_DEVICE: "generic"
-      BUILD_TYPE: "userdebug" 
-      BUILD_VARIANT: "lineage"
+          limit: 3
+    artifact_paths:
+      - "logs/dependency-install.log"
+      - "logs/package-verification.json"
 
-  - label: ":arrow_up: Enterprise Artifact Distribution"
-    key: "upload-artifacts"
-    depends_on: "package-rom"
+
+  - label: ":octocat: Enterprise Repository Initialization"
+    key: "repo-init"
+    depends_on: "dependency-management"
     command: |
       set -euo pipefail
       
-      echo "🚀 Enterprise-grade artifact distribution and validation..."
+      echo "🚀 Enterprise Android repository initialization..."
       
-      # Create upload log
-      mkdir -p logs
-      UPLOAD_LOG="logs/artifact-upload.log"
+      # Create workspace and logs
+      mkdir -p android-workspace logs
+      cd android-workspace
+      
+      # Initialize timing and monitoring
+      START_TIME=$$(date +%s)
+      INIT_LOG="../logs/repo-init.log"
       
       {
-        echo "=== ARTIFACT UPLOAD LOG ==="
-        echo "Started: $(date)"
-        echo "Build: ${BUILDKITE_BUILD_NUMBER:-unknown}"
-        echo "Pipeline: ${BUILDKITE_PIPELINE_SLUG:-unknown}"
+        echo "=== ANDROID REPOSITORY INITIALIZATION ==="
+        echo "Started: $$(date -Iseconds)"
+        echo "Manifest URL: $$MANIFEST_URL"
+        echo "Manifest Branch: $$MANIFEST_BRANCH"
+        echo "Target Device: $$TARGET_DEVICE"
         echo ""
-      } > "$UPLOAD_LOG"
+      } > "$$INIT_LOG"
       
-      # Pre-upload validation
-      echo "🔍 Pre-upload artifact validation..." | tee -a "$UPLOAD_LOG"
-      
-      ARTIFACTS_DIR="artifacts"
-      if [ ! -d "$ARTIFACTS_DIR" ]; then
-        echo "❌ Artifacts directory not found!" | tee -a "$UPLOAD_LOG"
+      # Validate manifest URL accessibility
+      echo "🔍 Validating manifest repository..."
+      if ! curl -s --head --max-time 30 "$$MANIFEST_URL" | grep -q "200 OK"; then
+        echo "❌ Manifest URL not accessible: $$MANIFEST_URL"
         exit 1
       fi
       
-      # Count and validate artifacts
-      ROM_COUNT=$(find "$ARTIFACTS_DIR" -name "*.zip" | wc -l)
-      IMG_COUNT=$(find "$ARTIFACTS_DIR" -name "*.img" | wc -l)
-      CHECKSUM_COUNT=$(find "$ARTIFACTS_DIR" -name "*.md5" -o -name "*.sha*" | wc -l)
-      TOTAL_SIZE=$(du -sh "$ARTIFACTS_DIR" | cut -f1)
+      echo "✅ Manifest repository accessible"
       
-      {
-        echo "=== UPLOAD VALIDATION ==="
-        echo "ROM packages: $ROM_COUNT"
-        echo "Image files: $IMG_COUNT"
-        echo "Checksum files: $CHECKSUM_COUNT"
-        echo "Total size: $TOTAL_SIZE"
-        echo ""
-      } | tee -a "$UPLOAD_LOG"
+      # Initialize repo with comprehensive error handling
+      echo "📋 Initializing Android repository..."
       
-      if [ $ROM_COUNT -eq 0 ] && [ $IMG_COUNT -eq 0 ]; then
-        echo "⚠️ No ROM or image files found to upload!" | tee -a "$UPLOAD_LOG"
-        echo "Directory contents:" | tee -a "$UPLOAD_LOG"
-        find "$ARTIFACTS_DIR" -type f | tee -a "$UPLOAD_LOG"
-      fi
-      
-      # Upload function with retry logic
-      upload_with_retry() {
-        local pattern="$1"
-        local description="$2"
+      # Function for repo operations with retry
+      repo_operation() {
+        local operation="$$1"
         local max_attempts=3
         local attempt=1
         
-        while [ $attempt -le $max_attempts ]; do
-          echo "Uploading $description (attempt $attempt/$max_attempts)..." | tee -a "$UPLOAD_LOG"
+        while [ $$attempt -le $$max_attempts ]; do
+          echo "🔄 Repo $$operation attempt $$attempt/$$max_attempts"
           
-          if buildkite-agent artifact upload "$pattern" 2>&1 | tee -a "$UPLOAD_LOG"; then
-            echo "✅ $description uploaded successfully" | tee -a "$UPLOAD_LOG"
-            return 0
-          else
-            echo "❌ Upload failed for $description" | tee -a "$UPLOAD_LOG"
-            if [ $attempt -eq $max_attempts ]; then
-              echo "💥 All upload attempts failed for $description" | tee -a "$UPLOAD_LOG"
-              return 1
+          if [ "$$operation" = "init" ]; then
+            if repo init -u "$$MANIFEST_URL" -b "$$MANIFEST_BRANCH" --depth=1 2>&1 | tee -a "$$INIT_LOG"; then
+              echo "✅ Repo initialization successful"
+              return 0
             fi
-            attempt=$((attempt + 1))
-            sleep 10
           fi
+          
+          echo "❌ Repo $$operation failed, attempt $$attempt/$$max_attempts"
+          
+          if [ $$attempt -lt $$max_attempts ]; then
+            echo "🧹 Cleaning up for retry..."
+            rm -rf .repo
+            sleep $$((attempt * 10))
+          fi
+          
+          attempt=$$((attempt + 1))
         done
+        
+        echo "💥 Repo $$operation failed after $$max_attempts attempts"
+        return 1
       }
       
-      # Upload ROM packages
-      if [ $ROM_COUNT -gt 0 ]; then
-        echo "📱 Uploading ROM packages..." | tee -a "$UPLOAD_LOG"
-        upload_with_retry "artifacts/roms/*.zip" "ROM packages"
+      # Execute repo initialization with retry
+      if ! repo_operation "init"; then
+        echo "💥 Repository initialization failed!"
+        exit 1
       fi
       
-      # Upload system images
-      if [ $IMG_COUNT -gt 0 ]; then
-        echo "💿 Uploading system images..." | tee -a "$UPLOAD_LOG"
-        upload_with_retry "artifacts/images/*.img" "system images"
-        upload_with_retry "artifacts/recovery/*.img" "recovery images"
+      # Validate repo initialization
+      if [ ! -d .repo ]; then
+        echo "❌ Repository initialization incomplete - .repo directory missing"
+        exit 1
       fi
       
-      # Upload checksums and metadata
-      echo "🔐 Uploading checksums and metadata..." | tee -a "$UPLOAD_LOG"
-      upload_with_retry "artifacts/*.json" "build metadata"
-      upload_with_retry "artifacts/**/*.md5" "MD5 checksums"
-      upload_with_retry "artifacts/**/*.sha*" "SHA checksums"
-      
-      # Upload documentation
-      echo "📚 Uploading documentation..." | tee -a "$UPLOAD_LOG"
-      upload_with_retry "artifacts/*.md" "installation instructions"
-      
-      # Upload all logs
-      echo "📄 Uploading build logs..." | tee -a "$UPLOAD_LOG"
-      upload_with_retry "logs/*.log" "build logs"
-      
-      # Final upload summary
+      # Generate repository analysis
       {
-        echo "=== UPLOAD SUMMARY ==="
-        echo "Upload completed: $(date)"
-        echo "Artifacts uploaded:"
-        buildkite-agent artifact search "*" | head -20 || echo "Could not list artifacts"
-        echo ""
-        echo "Download links will be available in the Buildkite artifacts tab"
-        echo "Total upload size: $TOTAL_SIZE"
-        
-      } | tee -a "$UPLOAD_LOG"
+        echo "=== REPOSITORY ANALYSIS ==="
+        echo "Repo version: $$(repo --version | head -1)"
+        echo "Manifest projects: $$(repo list | wc -l)"
+        echo "Repo directory size: $$(du -sh .repo | cut -f1)"
+        echo "Initialization time: $$(($(date +%s) - START_TIME))s"
+      } | tee -a "$$INIT_LOG"
       
-      echo "✅ All artifacts uploaded successfully!" | tee -a "$UPLOAD_LOG"
+      # Create repository state report
+      {
+        echo "{"
+        echo "  \"timestamp\": \"$$(date -Iseconds)\","
+        echo "  \"manifest_url\": \"$$MANIFEST_URL\","
+        echo "  \"manifest_branch\": \"$$MANIFEST_BRANCH\","
+        echo "  \"repo_version\": \"$$(repo --version | head -1)\","
+        echo "  \"project_count\": $$(repo list | wc -l),"
+        echo "  \"initialization_time_seconds\": $$(($(date +%s) - START_TIME)),"
+        echo "  \"status\": \"initialized\""
+        echo "}"
+      } > ../logs/manifest-info.json
       
-      # Upload the upload log itself
-      buildkite-agent artifact upload "$UPLOAD_LOG"
+      echo "✅ Android repository initialized successfully!"
+      
+      # Upload artifacts from parent directory
+      cd ..
+      buildkite-agent artifact upload "$$INIT_LOG"
+      buildkite-agent artifact upload "logs/manifest-info.json"
     agents:
       queue: "default"
-    timeout_in_minutes: 60
+    timeout_in_minutes: 30
     retry:
       automatic:
         - exit_status: "*"
-          limit: 2
+          limit: 3
+    artifact_paths:
+      - "logs/repo-init.log"
+      - "logs/manifest-info.json"
+    concurrency_group: "repo-init"
+    concurrency: 1
 
-  - label: ":trophy: Build Success & Analytics"
-    depends_on: "upload-artifacts"
+  - label: ":arrows_counterclockwise: Enterprise Source Synchronization"
+    key: "source-sync"
+    depends_on: "repo-init"
     command: |
       set -euo pipefail
       
-      echo "🎉 Android ROM build pipeline completed successfully!"
+      echo "🔄 Enterprise Android source synchronization..."
       
-      # Create final report
-      mkdir -p logs
-      FINAL_REPORT="logs/build-final-report.log"
+      cd android-workspace
+      
+      # Initialize sync monitoring
+      START_TIME=$$(date +%s)
+      SYNC_LOG="../logs/sync-$$(date +%Y%m%d-%H%M%S).log"
       
       {
-        echo "=========================================="
-        echo "      ANDROID ROM BUILD COMPLETE"
-        echo "=========================================="
+        echo "=== ENTERPRISE SOURCE SYNCHRONIZATION ==="
+        echo "Started: $$(date -Iseconds)"
+        echo "Sync Jobs: $${SYNC_JOBS:-8}"
+        echo "Working Directory: $$(pwd)"
         echo ""
-        echo "🏆 BUILD INFORMATION"
-        echo "Build Number: ${BUILDKITE_BUILD_NUMBER:-unknown}"
-        echo "Build URL: ${BUILDKITE_BUILD_URL:-unknown}"
-        echo "Pipeline: ${BUILDKITE_PIPELINE_SLUG:-unknown}"
-        echo "Commit: ${BUILDKITE_COMMIT:-unknown}"
-        echo "Branch: ${BUILDKITE_BRANCH:-unknown}"
-        echo "Triggered by: ${BUILDKITE_BUILD_CREATOR:-unknown}"
-        echo ""
-        echo "📱 DEVICE CONFIGURATION"
-        echo "Target Device: ${TARGET_DEVICE:-generic}"
-        echo "Build Type: ${BUILD_TYPE:-userdebug}"
-        echo "Build Variant: ${BUILD_VARIANT:-lineage}"
-        echo ""
-        echo "⏱️ TIMING INFORMATION"
-        echo "Build started: ${BUILDKITE_BUILD_CREATED_AT:-unknown}"
-        echo "Build completed: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        echo ""
-        echo "🎯 QUICK LINKS"
-        echo "Artifacts: ${BUILDKITE_BUILD_URL:-unknown}#artifacts"
-        echo "Build logs: ${BUILDKITE_BUILD_URL:-unknown}#logs"
-        echo ""
-        echo "📦 WHAT'S INCLUDED"
-        echo "✅ Flashable ROM package (.zip)"
-        echo "✅ Individual partition images (.img)"
-        echo "✅ Recovery image (if built)"
-        echo "✅ Build metadata and checksums"
-        echo "✅ Installation instructions"
-        echo "✅ Complete build logs"
-        echo ""
-        echo "🔐 SECURITY"
-        echo "✅ MD5, SHA256, and SHA512 checksums provided"
-        echo "✅ Build reproducibility information included"
-        echo "✅ Build environment details logged"
-        echo ""
-        echo "📋 NEXT STEPS"
-        echo "1. Download artifacts from the Artifacts tab"
-        echo "2. Verify checksums before flashing"
-        echo "3. Follow installation instructions"
-        echo "4. Create a backup before flashing"
-        echo "5. Test thoroughly before daily use"
-        echo ""
-        echo "🆘 SUPPORT"
-        echo "- Check build logs if you encounter issues"
-        echo "- Verify your device is supported"
-        echo "- Ensure bootloader is unlocked"
-        echo "- Use appropriate recovery (TWRP recommended)"
-        echo ""
-        echo "=========================================="
-        echo "        BUILD COMPLETED SUCCESSFULLY!"
-        echo "=========================================="
-        
-      } | tee "$FINAL_REPORT"
+      } > "$$SYNC_LOG"
       
-      # Display key information
-      cat "$FINAL_REPORT"
-      
-      # Upload final report
-      buildkite-agent artifact upload "$FINAL_REPORT"
-      
-      # Analytics and notifications (if configured)
-      if [ -n "${SLACK_WEBHOOK:-}" ]; then
-        echo "📢 Sending Slack notification..."
-        curl -X POST -H 'Content-type: application/json' \
-          --data "{
-            \"text\": \"🎉 Android ROM build completed!\",
-            \"attachments\": [{
-              \"color\": \"good\",
-              \"fields\": [
-                {\"title\": \"Device\", \"value\": \"${TARGET_DEVICE:-generic}\", \"short\": true},
-                {\"title\": \"Variant\", \"value\": \"${BUILD_VARIANT:-lineage}\", \"short\": true},
-                {\"title\": \"Build\", \"value\": \"#${BUILDKITE_BUILD_NUMBER:-unknown}\", \"short\": true},
-                {\"title\": \"Branch\", \"value\": \"${BUILDKITE_BRANCH:-unknown}\", \"short\": true}
-              ],
-              \"actions\": [{
-                \"type\": \"button\",
-                \"text\": \"Download Artifacts\",
-                \"url\": \"${BUILDKITE_BUILD_URL:-unknown}#artifacts\"
-              }]
-            }]
-          }" \
-          "${SLACK_WEBHOOK}" || echo "Slack notification failed"
+      # Determine optimal sync job count based on system resources
+      if [ -z "$$SYNC_JOBS" ]; then
+        CORES=$$(nproc)
+        if [ "$$CORES" -ge 16 ]; then
+          SYNC_JOBS=16
+        elif [ "$$CORES" -ge 8 ]; then
+          SYNC_JOBS=8
+        else
+          SYNC_JOBS=4
+        fi
+        echo "🔧 Auto-detected sync jobs: $$SYNC_JOBS (based on $$CORES cores)"
       fi
       
-      echo ""
-      echo "🚀 Your Android ROM is ready!"
-      echo "📲 Download from: ${BUILDKITE_BUILD_URL:-unknown}#artifacts"
-      echo ""
+      # Enhanced sync function with progress monitoring
+      enterprise_sync() {
+        local attempt=1
+        local max_attempts=5
+        local base_delay=60
+        
+        while [ $$attempt -le $$max_attempts ]; do
+          echo "🔄 Sync attempt $$attempt/$$max_attempts (using $$SYNC_JOBS jobs)"
+          
+          # Start sync with comprehensive monitoring
+          {
+            echo "=== SYNC ATTEMPT $$attempt ==="
+            echo "Started: $$(date -Iseconds)"
+            echo "Command: repo sync -c -j$$SYNC_JOBS --force-sync --no-tags --no-clone-bundle --optimized-fetch --prune"
+          } | tee -a "$$SYNC_LOG"
+          
+          # Execute sync with timeout and monitoring
+          if timeout 7200 repo sync -c -j"$$SYNC_JOBS" --force-sync --no-tags --no-clone-bundle --optimized-fetch --prune 2>&1 | tee -a "$$SYNC_LOG"; then
+            echo "✅ Source synchronization completed successfully!"
+            
+            # Generate sync completion report
+            {
+              echo "=== SYNC COMPLETION REPORT ==="
+              echo "Completed: $$(date -Iseconds)"
+              echo "Total sync time: $$(($(date +%s) - START_TIME))s"
+              echo "Projects synced: $$(repo list | wc -l)"
+              echo "Repository size: $$(du -sh . | cut -f1)"
+            } | tee -a "$$SYNC_LOG"
+            
+            return 0
+          else
+            SYNC_EXIT_CODE=$$?
+            echo "❌ Sync attempt $$attempt failed with exit code: $$SYNC_EXIT_CODE"
+            
+            # Analyze failure and attempt recovery
+            if [ $$SYNC_EXIT_CODE -eq 124 ]; then
+              echo "⏰ Sync timed out - may need to reduce concurrent jobs"
+              if [ "$$SYNC_JOBS" -gt 2 ]; then
+                SYNC_JOBS=$$((SYNC_JOBS / 2))
+                echo "🔧 Reducing sync jobs to $$SYNC_JOBS for retry"
+              fi
+            fi
+            
+            # Clean up corrupted state if needed
+            echo "🧹 Cleaning up potential corruption..."
+            repo forall -c 'git reset --hard HEAD; git clean -fd' 2>/dev/null || true
+            
+            if [ $$attempt -lt $$max_attempts ]; then
+              delay=$$((base_delay * attempt))
+              echo "⏳ Waiting $${delay}s before retry..."
+              sleep $$delay
+            fi
+          fi
+          
+          attempt=$$((attempt + 1))
+        done
+        
+        echo "💥 All sync attempts failed!"
+        return 1
+      }
+      
+      # Execute enterprise sync
+      if ! enterprise_sync; then
+        echo "💥 Source synchronization failed after all retry attempts!"
+        exit 1
+      fi
+      
+      # Verify sync integrity
+      echo "🔍 Verifying synchronization integrity..."
+      
+      REPO_STATUS=$$(repo status 2>/dev/null | wc -l)
+      if [ "$$REPO_STATUS" -gt 0 ]; then
+        echo "⚠️ Warning: $$REPO_STATUS projects have uncommitted changes"
+        repo status | head -20 | tee -a "$$SYNC_LOG"
+      else
+        echo "✅ All projects are clean"
+      fi
+      
+      # Generate comprehensive sync analytics
+      {
+        echo "{"
+        echo "  \"timestamp\": \"$$(date -Iseconds)\","
+        echo "  \"sync_duration_seconds\": $$(($(date +%s) - START_TIME)),"
+        echo "  \"sync_jobs_used\": $$SYNC_JOBS,"
+        echo "  \"total_projects\": $$(repo list | wc -l),"
+        echo "  \"repository_size_mb\": $$(du -sm . | cut -f1),"
+        echo "  \"projects_with_changes\": $$REPO_STATUS,"
+        echo "  \"status\": \"completed\""
+        echo "}"
+      } > ../logs/sync-analytics.json
+      
+      echo "✅ Enterprise source synchronization completed!"
+      
+      # Clone device-specific trees if specified
+      echo "🌳 Cloning device trees and vendor blobs..."
+      
+      if [ -n "$$DEVICE_TREE_URL" ]; then
+        echo "📱 Cloning device tree from: $$DEVICE_TREE_URL"
+        DEVICE_PATH="device/$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
+        DEVICE_MANUFACTURER="$$(echo "$$DEVICE_PATH" | cut -d'/' -f2)"
+        DEVICE_NAME="$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
+        
+        mkdir -p "device/$$DEVICE_MANUFACTURER"
+        if ! git clone "$$DEVICE_TREE_URL" -b "$$DEVICE_TREE_BRANCH" "device/$$DEVICE_MANUFACTURER/$$DEVICE_NAME" 2>&1 | tee -a "$$SYNC_LOG"; then
+          echo "⚠️ Warning: Failed to clone device tree, continuing without it"
+        else
+          echo "✅ Device tree cloned to device/$$DEVICE_MANUFACTURER/$$DEVICE_NAME"
+        fi
+      fi
+      
+      if [ -n "$$KERNEL_SOURCE_URL" ]; then
+        echo "🔧 Cloning kernel source from: $$KERNEL_SOURCE_URL"
+        KERNEL_PATH="kernel/$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
+        KERNEL_MANUFACTURER="$$(echo "$$KERNEL_PATH" | cut -d'/' -f2)"
+        KERNEL_NAME="$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
+        
+        mkdir -p "kernel/$$KERNEL_MANUFACTURER"
+        if ! git clone "$$KERNEL_SOURCE_URL" -b "$$KERNEL_SOURCE_BRANCH" "kernel/$$KERNEL_MANUFACTURER/$$KERNEL_NAME" 2>&1 | tee -a "$$SYNC_LOG"; then
+          echo "⚠️ Warning: Failed to clone kernel source, continuing without it"
+        else
+          echo "✅ Kernel source cloned to kernel/$$KERNEL_MANUFACTURER/$$KERNEL_NAME"
+        fi
+      fi
+      
+      if [ -n "$$VENDOR_TREE_URL" ]; then
+        echo "🏢 Cloning vendor blobs from: $$VENDOR_TREE_URL"
+        VENDOR_PATH="vendor/$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
+        VENDOR_MANUFACTURER="$$(echo "$$VENDOR_PATH" | cut -d'/' -f2)"
+        VENDOR_NAME="$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
+        
+        mkdir -p "vendor/$$VENDOR_MANUFACTURER"
+        if ! git clone "$$VENDOR_TREE_URL" -b "$$VENDOR_TREE_BRANCH" "vendor/$$VENDOR_MANUFACTURER/$$VENDOR_NAME" 2>&1 | tee -a "$$SYNC_LOG"; then
+          echo "⚠️ Warning: Failed to clone vendor tree, continuing without it"
+        else
+          echo "✅ Vendor blobs cloned to vendor/$$VENDOR_MANUFACTURER/$$VENDOR_NAME"
+        fi
+      fi
+      
+      # Upload artifacts
+      cd ..
+      buildkite-agent artifact upload "$$SYNC_LOG"
+      buildkite-agent artifact upload "logs/sync-analytics.json"
     agents:
       queue: "default"
-    env:
-      TARGET_DEVICE: "generic"
-      BUILD_TYPE: "userdebug"
-      BUILD_VARIANT: "lineage" 
+    timeout_in_minutes: 180
+    retry:
+      automatic:
+        - exit_status: 1
+          limit: 3
+        - exit_status: 124
+          limit: 3
+    artifact_paths:
+      - "logs/sync-*.log"
+      - "logs/sync-analytics.json"
+    concurrency_group: "source-sync"
+    concurrency: 2
+
+  - wait: ~
+    continue_on_failure: false
+
+  - label: ":building_construction: Enterprise Android ROM Build"
+    key: "android-build"
+    depends_on: "source-sync"
+    command: |
+      set -euo pipefail
+      
+      echo "🚀 Enterprise Android ROM Build System Initiated"
+      
+      cd android-workspace
+      
+      # Enterprise build monitoring initialization
+      BUILD_START=$$(date +%s)
+      BUILD_ID="build-$$(date +%Y%m%d-%H%M%S)"
+      BUILD_LOG="../logs/$$BUILD_ID.log"
+      
+      {
+        echo "=== ENTERPRISE ANDROID ROM BUILD ==="
+        echo "Build ID: $$BUILD_ID"
+        echo "Started: $$(date -Iseconds)"
+        echo "Target Device: $$TARGET_DEVICE"
+        echo "Build Variant: $$BUILD_VARIANT"
+        echo "Build Type: $$BUILD_TYPE"
+        echo "Clean Build: $$CLEAN_BUILD"
+        echo ""
+      } > "$$BUILD_LOG"
+      
+      # Advanced resource monitoring function
+      monitor_resources() {
+        while true; do
+          {
+            echo "RESOURCE_SNAPSHOT: $$(date +%s)"
+            echo "CPU_USAGE: $$(top -bn1 | grep "Cpu(s)" | awk '{print $$2}' | cut -d'%' -f1)"
+            echo "MEMORY_USAGE: $$(free | awk '/^Mem:/ {printf "%.1f", ($$3/$$2)*100}')"
+            echo "DISK_USAGE: $$(df -h . | awk 'NR==2 {print $$5}' | cut -d'%' -f1)"
+            echo "CCACHE_STATS: $$(ccache -s | grep 'cache hit rate' | awk '{print $$4}')"
+            echo "LOAD_AVERAGE: $$(uptime | awk -F'load average:' '{print $$2}' | awk '{print $$1}' | tr -d ',')"
+          } >> "../logs/resource-usage-$$BUILD_ID.log"
+          sleep 60
+        done &
+        MONITOR_PID=$$!
+        echo "📊 Resource monitoring started (PID: $$MONITOR_PID)"
+      }
+      
+      # Intelligent build job calculation
+      calculate_build_jobs() {
+        local cores=$$(nproc)
+        local ram_gb=$$(free -g | awk '/^Mem:/ {print $$2}')
+        local jobs
+        
+        if [ -n "$$BUILD_JOBS" ]; then
+          jobs="$$BUILD_JOBS"
+          echo "🔧 Using specified build jobs: $$jobs"
+        else
+          # Calculate optimal jobs based on resources
+          if [ "$$ram_gb" -ge 64 ]; then
+            jobs=$$((cores * 2))
+          elif [ "$$ram_gb" -ge 32 ]; then
+            jobs=$$cores
+          elif [ "$$ram_gb" -ge 16 ]; then
+            jobs=$$((cores / 2))
+          else
+            jobs=$$((cores / 4))
+          fi
+          
+          # Cap at reasonable limits
+          if [ "$$jobs" -gt 32 ]; then
+            jobs=32
+          elif [ "$$jobs" -lt 1 ]; then
+            jobs=1
+          fi
+          
+          echo "🧮 Calculated optimal build jobs: $$jobs ($$cores cores, $${ram_gb}GB RAM)"
+        fi
+        
+        echo "$$jobs"
+      }
+      
+      # Start resource monitoring
+      monitor_resources
+      
+      # Calculate build jobs
+      BUILD_JOBS_CALCULATED=$$(calculate_build_jobs)
+      
+      # Set up build environment
+      echo "🔧 Configuring enterprise build environment..."
+      
+      # Export Android build environment
+      export USE_CCACHE=1
+      export CCACHE_DIR="$$HOME/.ccache"
+      export ANDROID_JACK_VM_ARGS="-Xmx4g -Dfile.encoding=UTF-8 -XX:+TieredCompilation"
+      export JACK_SERVER_VM_ARGUMENTS="-Xmx4g -Dfile.encoding=UTF-8 -XX:+TieredCompilation"
+      
+      # Configure Java environment
+      export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+      export PATH=$$JAVA_HOME/bin:$$PATH
+      
+      # Advanced build optimization
+      if [ "$$ram_gb" -ge 32 ]; then
+        export ANDROID_COMPILE_WITH_JACK=true
+        export DEFAULT_JACK_EXTRA_ARGS="--multi-dex=native"
+      fi
+      
+      # Clean build if requested
+      if [ "$$CLEAN_BUILD" = "true" ]; then
+        echo "🧹 Performing clean build..."
+        if [ -d "out" ]; then
+          rm -rf out
+        fi
+        make clean 2>/dev/null || true
+        ccache -C
+      fi
+      
+      # Source build environment
+      echo "📋 Sourcing build environment..."
+      source build/envsetup.sh
+      
+      # Device configuration and validation
+      echo "🔍 Configuring target device: $$TARGET_DEVICE"
+      
+      if ! lunch "$$TARGET_DEVICE" 2>&1 | tee -a "$$BUILD_LOG"; then
+        echo "❌ Failed to configure device: $$TARGET_DEVICE"
+        exit 1
+      fi
+      
+      # Enterprise build execution with comprehensive monitoring
+      echo "🏗️ Starting enterprise ROM build..."
+      
+      {
+        echo "=== BUILD EXECUTION ==="
+        echo "Build Jobs: $$BUILD_JOBS_CALCULATED"
+        echo "Ccache Size: $$(ccache -s | head -1)"
+        echo "Java Version: $$(java -version 2>&1 | head -1)"
+        echo "Build Command: make -j$$BUILD_JOBS_CALCULATED bacon"
+        echo "Started: $$(date -Iseconds)"
+      } | tee -a "$$BUILD_LOG"
+      
+      # Execute build with comprehensive error handling
+      if ! make -j"$$BUILD_JOBS_CALCULATED" bacon 2>&1 | tee -a "$$BUILD_LOG"; then
+        BUILD_EXIT_CODE=$$?
+        echo "❌ Build failed with exit code: $$BUILD_EXIT_CODE"
+        
+        # Kill monitoring process
+        if [ -n "$${MONITOR_PID:-}" ]; then
+          kill "$$MONITOR_PID" 2>/dev/null || true
+        fi
+        
+        # Comprehensive build failure analysis
+        echo "🔍 Analyzing build failure..."
+        
+        # Check for common failure patterns
+        if grep -q "FAILED.*ninja" "$$BUILD_LOG"; then
+          echo "💥 Ninja build system failure detected"
+          echo "🔧 Recommendation: Check for missing dependencies or corrupted source"
+        elif grep -q "out of memory\|Cannot allocate memory" "$$BUILD_LOG"; then
+          echo "💥 Out of memory error detected"
+          echo "🔧 Recommendation: Reduce build jobs or increase system memory"
+        elif grep -q "No space left on device" "$$BUILD_LOG"; then
+          echo "💥 Disk space exhausted"
+          echo "🔧 Recommendation: Clean build directory or expand storage"
+        elif grep -q "fatal.*killed" "$$BUILD_LOG"; then
+          echo "💥 Build process was killed (likely OOM)"
+          echo "🔧 Recommendation: Reduce concurrent jobs and enable swap"
+        fi
+        
+        # Generate failure report
+        {
+          echo "{"
+          echo "  \"timestamp\": \"$$(date -Iseconds)\","
+          echo "  \"build_id\": \"$$BUILD_ID\","
+          echo "  \"exit_code\": $$BUILD_EXIT_CODE,"
+          echo "  \"duration_seconds\": $$(($(date +%s) - BUILD_START)),"
+          echo "  \"target_device\": \"$$TARGET_DEVICE\","
+          echo "  \"build_jobs\": $$BUILD_JOBS_CALCULATED,"
+          echo "  \"status\": \"failed\""
+          echo "}"
+        } > "../logs/build-failure-$$BUILD_ID.json"
+        
+        exit $$BUILD_EXIT_CODE
+      fi
+      
+      # Kill monitoring process
+      if [ -n "$${MONITOR_PID:-}" ]; then
+        kill "$$MONITOR_PID" 2>/dev/null || true
+      fi
+      
+      # Build success processing
+      BUILD_END=$$(date +%s)
+      BUILD_DURATION=$$((BUILD_END - BUILD_START))
+      
+      echo "✅ Build completed successfully in $${BUILD_DURATION}s!"
+      
+      # Locate and process build artifacts
+      echo "📦 Processing build artifacts..."
+      
+      DEVICE_OUT="out/target/product"
+      if [ -d "$$DEVICE_OUT" ]; then
+        DEVICE_DIR=$$(ls "$$DEVICE_OUT" | head -1)
+        if [ -n "$$DEVICE_DIR" ]; then
+          ARTIFACT_PATH="$$DEVICE_OUT/$$DEVICE_DIR"
+          
+          # Generate checksums for all artifacts
+          echo "🔐 Generating security checksums..."
+          find "$$ARTIFACT_PATH" -name "*.zip" -o -name "*.img" | while read -r file; do
+            if [ -f "$$file" ]; then
+              md5sum "$$file" > "$${file}.md5"
+              sha256sum "$$file" > "$${file}.sha256"
+            fi
+          done
+          
+          # Create build manifest
+          {
+            echo "=== BUILD MANIFEST ==="
+            echo "Build ID: $$BUILD_ID"
+            echo "Completed: $$(date -Iseconds)"
+            echo "Duration: $${BUILD_DURATION}s"
+            echo "Device: $$TARGET_DEVICE"
+            echo "Artifacts:"
+            find "$$ARTIFACT_PATH" -name "*.zip" -o -name "*.img" | while read -r file; do
+              if [ -f "$$file" ]; then
+                echo "  - $$(basename "$$file") ($$(stat -c%s "$$file" | numfmt --to=iec-i))"
+              fi
+            done
+          } > "../logs/build-manifest-$$BUILD_ID.txt"
+        fi
+      fi
+      
+      # Generate comprehensive build analytics
+      {
+        echo "{"
+        echo "  \"timestamp\": \"$$(date -Iseconds)\","
+        echo "  \"build_id\": \"$$BUILD_ID\","
+        echo "  \"duration_seconds\": $$BUILD_DURATION,"
+        echo "  \"target_device\": \"$$TARGET_DEVICE\","
+        echo "  \"build_variant\": \"$$BUILD_VARIANT\","
+        echo "  \"build_jobs\": $$BUILD_JOBS_CALCULATED,"
+        echo "  \"ccache_hit_rate\": \"$$(ccache -s | grep 'cache hit rate' | awk '{print $$4}' || echo 'N/A')\","
+        echo "  \"total_size_mb\": $$(du -sm out 2>/dev/null | cut -f1 || echo 0),"
+        echo "  \"status\": \"success\""
+        echo "}"
+      } > "../logs/build-analytics-$$BUILD_ID.json"
+      
+      echo "✅ Enterprise Android ROM build completed successfully!"
+      
+      # Upload artifacts
+      cd ..
+      buildkite-agent artifact upload "$$BUILD_LOG"
+      buildkite-agent artifact upload "logs/build-analytics-$$BUILD_ID.json"
+      buildkite-agent artifact upload "logs/resource-usage-$$BUILD_ID.log"
+      buildkite-agent artifact upload "logs/build-manifest-$$BUILD_ID.txt"
+      
+      # Upload ROM artifacts if they exist
+      if [ -d "android-workspace/out/target/product" ]; then
+        find android-workspace/out/target/product -name "*.zip" -o -name "*.img" -o -name "*.md5" -o -name "*.sha256" | while read -r file; do
+          if [ -f "$$file" ]; then
+            buildkite-agent artifact upload "$$file"
+          fi
+        done
+      fi
+    agents:
+      queue: "default"
+    timeout_in_minutes: 300
+    retry:
+      automatic:
+        - exit_status: 130
+          limit: 2
+        - exit_status: 137
+          limit: 2
+    artifact_paths:
+      - "logs/build-*.log"
+      - "logs/build-analytics-*.json"
+      - "logs/resource-usage-*.log"
+      - "logs/build-manifest-*.txt"
+      - "android-workspace/out/target/product/*/*.zip"
+      - "android-workspace/out/target/product/*/*.img"
+      - "android-workspace/out/target/product/*/*.md5"
+      - "android-workspace/out/target/product/*/*.sha256"
+    concurrency_group: "android-build"
+    concurrency: 1
+
+  - wait: ~
+    continue_on_failure: false
+
+  - label: ":bell: Enterprise Build Notifications & Analytics"
+    key: "notifications"
+    depends_on: "android-build"
+    command: |
+      set -euo pipefail
+      
+      echo "📊 Enterprise build analytics and notifications..."
+      
+      # Generate comprehensive build report
+      BUILD_REPORT="logs/final-build-report-$$(date +%Y%m%d-%H%M%S).json"
+      
+      {
+        echo "{"
+        echo "  \"pipeline_version\": \"$$PIPELINE_VERSION\","
+        echo "  \"timestamp\": \"$$(date -Iseconds)\","
+        echo "  \"build_result\": \"$$BUILDKITE_BUILD_STATE\","
+        echo "  \"target_device\": \"$$TARGET_DEVICE\","
+        echo "  \"build_variant\": \"$$BUILD_VARIANT\","
+        echo "  \"build_type\": \"$$BUILD_TYPE\","
+        echo "  \"build_number\": \"$$BUILDKITE_BUILD_NUMBER\","
+        echo "  \"commit_hash\": \"$$BUILDKITE_COMMIT\","
+        echo "  \"branch\": \"$$BUILDKITE_BRANCH\","
+        echo "  \"pipeline_slug\": \"$$BUILDKITE_PIPELINE_SLUG\","
+        echo "  \"build_url\": \"$$BUILDKITE_BUILD_URL\","
+        echo "  \"agent_name\": \"$$BUILDKITE_AGENT_NAME\""
+        echo "}"
+      } > "$$BUILD_REPORT"
+      
+      # Send Slack notification if webhook is configured
+      if [ -n "$${SLACK_WEBHOOK:-}" ]; then
+        echo "📱 Sending Slack notification..."
+        
+        if [ "$$BUILDKITE_BUILD_STATE" = "passed" ]; then
+          STATUS_EMOJI="✅"
+          STATUS_COLOR="good"
+          STATUS_TEXT="SUCCESS"
+        else
+          STATUS_EMOJI="❌"
+          STATUS_COLOR="danger"
+          STATUS_TEXT="FAILED"
+        fi
+        
+        curl -X POST "$$SLACK_WEBHOOK" \
+          -H 'Content-type: application/json' \
+          --data "{
+            \"username\": \"Buildkite Android ROM Builder\",
+            \"icon_emoji\": \":robot_face:\",
+            \"attachments\": [
+              {
+                \"color\": \"$$STATUS_COLOR\",
+                \"title\": \"$$STATUS_EMOJI Android ROM Build $$STATUS_TEXT\",
+                \"fields\": [
+                  {
+                    \"title\": \"Device\",
+                    \"value\": \"$$TARGET_DEVICE\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Build #\",
+                    \"value\": \"$$BUILDKITE_BUILD_NUMBER\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Branch\",
+                    \"value\": \"$$BUILDKITE_BRANCH\",
+                    \"short\": true
+                  },
+                  {
+                    \"title\": \"Agent\",
+                    \"value\": \"$$BUILDKITE_AGENT_NAME\",
+                    \"short\": true
+                  }
+                ],
+                \"actions\": [
+                  {
+                    \"type\": \"button\",
+                    \"text\": \"View Build\",
+                    \"url\": \"$$BUILDKITE_BUILD_URL\"
+                  }
+                ]
+              }
+            ]
+          }" || echo "⚠️ Failed to send Slack notification"
+      fi
+      
+      # Print build summary
+      echo ""
+      echo "🎯 ===== ENTERPRISE BUILD SUMMARY ====="
+      echo "📱 Device: $$TARGET_DEVICE"
+      echo "🏗️ Build: #$$BUILDKITE_BUILD_NUMBER"
+      echo "🌟 Status: $$BUILDKITE_BUILD_STATE"
+      echo "🚀 Pipeline: $$PIPELINE_VERSION"
+      echo "🔗 URL: $$BUILDKITE_BUILD_URL"
+      echo "⏰ Completed: $$(date)"
+      echo "=================================="
+      echo ""
+      
+      if [ "$$BUILDKITE_BUILD_STATE" = "passed" ]; then
+        echo "🎉 Congratulations! Your Android ROM has been built successfully!"
+        echo "📦 Check the artifacts section for your ROM files and installation instructions."
+        echo "🔐 All files include MD5 and SHA256 checksums for verification."
+      else
+        echo "💥 Build failed. Check the logs for detailed error information."
+        echo "🔍 Common solutions:"
+        echo "   • Increase system memory if out-of-memory errors occurred"
+        echo "   • Clean build directory if disk space issues"
+        echo "   • Check network connectivity for source sync issues"
+        echo "   • Verify target device configuration"
+      fi
+      
+      # Upload final report
+      buildkite-agent artifact upload "$$BUILD_REPORT"
+      
+      echo "✅ Enterprise build process completed!"
+    agents:
+      queue: "default"
+    timeout_in_minutes: 5
+    artifact_paths:
+      - "logs/final-build-report-*.json" 
