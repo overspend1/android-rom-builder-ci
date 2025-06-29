@@ -1,51 +1,107 @@
 steps:
-  - label: ":android: Setup Environment"
+  - label: ":android: Setup Android Environment"
     key: "setup"
     command: |
-      echo "Setting up Android build environment..."
-      docker --version
-      docker-compose --version
-      echo "Environment ready!"
+      echo "🚀 Setting up Android build environment..."
+      
+      # Check system requirements
+      echo "📊 System info:"
+      uname -a
+      free -h
+      df -h .
+      nproc
+      
+      # Check required tools
+      echo "🔧 Checking required tools..."
+      which python3 || echo "⚠️ Python3 not found"
+      which git || echo "⚠️ Git not found"
+      which curl || echo "⚠️ Curl not found"
+      
+      echo "✅ Environment check complete!"
     agents:
       queue: "default"
 
-  - label: ":package: Build Docker Image"
-    key: "build-image"
+  - label: ":package: Install Dependencies"
+    key: "install-deps"
     depends_on: "setup"
     command: |
-      echo "Building Android ROM builder Docker image..."
-      cd docker
-      docker build -t android-rom-builder:latest .
-      echo "Docker image built successfully!"
+      echo "📦 Installing Android build dependencies..."
+      
+      # Update package lists
+      sudo apt-get update
+      
+      # Install essential packages for Android building
+      sudo apt-get install -y \
+        git curl python3 python3-pip \
+        openjdk-8-jdk build-essential \
+        libssl-dev libc6-dev libncurses5 \
+        libncurses5-dev libreadline-dev \
+        libtinfo5 libxml2-utils xsltproc \
+        zip zlib1g-dev g++-multilib \
+        gcc-multilib lib32ncurses5-dev \
+        lib32readline-dev lib32z1-dev \
+        ccache bison flex bc rsync \
+        schedtool squashfs-tools \
+        python3-mako libffi-dev
+      
+      # Install repo tool
+      sudo curl https://storage.googleapis.com/git-repo-downloads/repo -o /usr/local/bin/repo
+      sudo chmod a+x /usr/local/bin/repo
+      
+      echo "✅ Dependencies installed!"
     agents:
       queue: "default"
+    timeout_in_minutes: 20
 
   - label: ":octocat: Initialize Android Source"
     key: "init-source"
-    depends_on: "build-image"
+    depends_on: "install-deps"
     command: |
-      echo "Initializing Android source repository..."
-      mkdir -p source
-      docker run --rm \
-        -v $$(pwd)/source:/home/buildbot/android/source \
-        -v $$(pwd)/scripts:/home/buildbot/scripts:ro \
-        android-rom-builder:latest \
-        /home/buildbot/scripts/init-source.sh
+      echo "🔧 Initializing Android source repository..."
+      
+      # Configuration
+      MANIFEST_URL="${MANIFEST_URL:-https://github.com/LineageOS/android.git}"
+      MANIFEST_BRANCH="${MANIFEST_BRANCH:-lineage-21.0}"
+      
+      echo "📋 Using manifest: $MANIFEST_URL"
+      echo "🌿 Branch: $MANIFEST_BRANCH"
+      
+      # Configure git
+      git config --global user.email "buildbot@buildkite.local"
+      git config --global user.name "Buildkite Android Builder"
+      
+      # Create and initialize source directory
+      mkdir -p android-source
+      cd android-source
+      
+      if [ ! -d ".repo" ]; then
+        echo "🔄 Initializing repo..."
+        repo init -u "$MANIFEST_URL" -b "$MANIFEST_BRANCH" --depth=1 --no-clone-bundle
+        echo "✅ Repository initialized!"
+      else
+        echo "📁 Repository already initialized"
+      fi
     agents:
       queue: "default"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 10
+    env:
+      MANIFEST_URL: "https://github.com/LineageOS/android.git"
+      MANIFEST_BRANCH: "lineage-21.0"
 
-  - label: ":arrows_counterclockwise: Sync Android Source"  
+  - label: ":arrows_counterclockwise: Sync Android Source"
     key: "sync-source"
     depends_on: "init-source"
     command: |
-      echo "Syncing Android source code..."
-      docker run --rm \
-        -v $$(pwd)/source:/home/buildbot/android/source \
-        -v $$(pwd)/ccache:/home/buildbot/android/ccache \
-        -v $$(pwd)/scripts:/home/buildbot/scripts:ro \
-        android-rom-builder:latest \
-        /home/buildbot/scripts/sync-source.sh
+      echo "⬇️ Syncing Android source code..."
+      
+      cd android-source
+      
+      # Sync with parallel jobs
+      echo "🚀 Starting source sync with $(nproc) parallel jobs..."
+      repo sync -c -j$(nproc) --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune
+      
+      echo "✅ Source sync completed!"
+      echo "📊 Source size: $(du -sh . | cut -f1)"
     agents:
       queue: "default"
     timeout_in_minutes: 120
@@ -54,54 +110,149 @@ steps:
     key: "build-rom"
     depends_on: "sync-source"
     command: |
-      echo "Building Android ROM..."
-      docker run --rm \
-        -v $$(pwd)/source:/home/buildbot/android/source \
-        -v $$(pwd)/out:/home/buildbot/android/out \
-        -v $$(pwd)/ccache:/home/buildbot/android/ccache \
-        -v $$(pwd)/scripts:/home/buildbot/scripts:ro \
-        --shm-size=2g \
-        android-rom-builder:latest \
-        /home/buildbot/scripts/build-rom.sh
+      echo "🔨 Building Android ROM..."
+      
+      cd android-source
+      
+      # Configuration
+      TARGET_DEVICE="${TARGET_DEVICE:-generic}"
+      BUILD_TYPE="${BUILD_TYPE:-userdebug}"
+      BUILD_VARIANT="${BUILD_VARIANT:-lineage}"
+      
+      echo "🎯 Build configuration:"
+      echo "  Device: $TARGET_DEVICE"
+      echo "  Type: $BUILD_TYPE"
+      echo "  Variant: $BUILD_VARIANT"
+      
+      # Set up build environment
+      echo "⚙️ Setting up build environment..."
+      source build/envsetup.sh
+      
+      # Configure ccache
+      export USE_CCACHE=1
+      export CCACHE_DIR=$PWD/../ccache
+      mkdir -p $CCACHE_DIR
+      ccache -M 50G
+      
+      # Select build target
+      echo "🎯 Selecting build target..."
+      lunch "${BUILD_VARIANT}_${TARGET_DEVICE}-${BUILD_TYPE}"
+      
+      # Start build
+      echo "🚀 Starting compilation..."
+      START_TIME=$(date +%s)
+      
+      if [ "$BUILD_VARIANT" = "lineage" ]; then
+        brunch "$TARGET_DEVICE"
+      else
+        make -j$(nproc) otapackage
+      fi
+      
+      END_TIME=$(date +%s)
+      BUILD_TIME=$((END_TIME - START_TIME))
+      
+      echo "✅ Build completed successfully!"
+      echo "⏱️ Build time: $(date -u -d @$BUILD_TIME +%H:%M:%S)"
     agents:
       queue: "default"
     timeout_in_minutes: 480
     env:
+      TARGET_DEVICE: "generic"
+      BUILD_TYPE: "userdebug"
+      BUILD_VARIANT: "lineage"
       USE_CCACHE: "1"
-      CCACHE_DIR: "/home/buildbot/android/ccache"
 
-  - label: ":package: Package ROM"
+  - label: ":package: Package ROM Artifacts"
     key: "package-rom"
     depends_on: "build-rom"
     command: |
-      echo "Packaging ROM artifacts..."
-      docker run --rm \
-        -v $$(pwd)/out:/home/buildbot/android/out \
-        -v $$(pwd)/artifacts:/home/buildbot/artifacts \
-        -v $$(pwd)/scripts:/home/buildbot/scripts:ro \
-        android-rom-builder:latest \
-        /home/buildbot/scripts/package-rom.sh
+      echo "📦 Packaging ROM artifacts..."
+      
+      TARGET_DEVICE="${TARGET_DEVICE:-generic}"
+      OUT_DIR="android-source/out/target/product/$TARGET_DEVICE"
+      
+      # Create artifacts directory
+      mkdir -p artifacts
+      
+      echo "📁 Copying build artifacts..."
+      
+      # Copy ROM files
+      find "$OUT_DIR" -name "*.zip" -exec cp {} artifacts/ \; 2>/dev/null || true
+      find "$OUT_DIR" -name "recovery.img" -exec cp {} artifacts/ \; 2>/dev/null || true  
+      find "$OUT_DIR" -name "boot.img" -exec cp {} artifacts/ \; 2>/dev/null || true
+      find "$OUT_DIR" -name "system.img" -exec cp {} artifacts/ \; 2>/dev/null || true
+      
+      # Create build info
+      cat > artifacts/build-info.json << EOF
+      {
+        "build_number": "${BUILDKITE_BUILD_NUMBER:-unknown}",
+        "commit": "${BUILDKITE_COMMIT:-unknown}",
+        "branch": "${BUILDKITE_BRANCH:-unknown}",
+        "device": "$TARGET_DEVICE",
+        "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+        "build_type": "${BUILD_TYPE:-userdebug}",
+        "variant": "${BUILD_VARIANT:-lineage}"
+      }
+      EOF
+      
+      # Generate checksums
+      cd artifacts
+      for file in *.zip *.img 2>/dev/null; do
+        [ -f "$file" ] && md5sum "$file" > "$file.md5"
+        [ -f "$file" ] && sha256sum "$file" > "$file.sha256"
+      done
+      
+      echo "📊 Artifacts created:"
+      ls -lh
+      
+      echo "✅ Packaging completed!"
     agents:
       queue: "default"
     timeout_in_minutes: 30
+    env:
+      TARGET_DEVICE: "generic"
+      BUILD_TYPE: "userdebug"
+      BUILD_VARIANT: "lineage"
 
-  - label: ":arrow_up: Upload Artifacts" 
+  - label: ":arrow_up: Upload Artifacts"
     key: "upload-artifacts"
     depends_on: "package-rom"
     command: |
-      echo "Uploading ROM artifacts..."
-      buildkite-agent artifact upload "artifacts/*.zip"
-      buildkite-agent artifact upload "artifacts/*.img"
+      echo "⬆️ Uploading ROM artifacts..."
+      
+      # Upload all ROM files
+      if ls artifacts/*.zip >/dev/null 2>&1; then
+        buildkite-agent artifact upload "artifacts/*.zip"
+      fi
+      
+      if ls artifacts/*.img >/dev/null 2>&1; then
+        buildkite-agent artifact upload "artifacts/*.img"
+      fi
+      
+      # Upload metadata
       buildkite-agent artifact upload "artifacts/*.json"
+      buildkite-agent artifact upload "artifacts/*.md5"
+      buildkite-agent artifact upload "artifacts/*.sha256"
+      
+      echo "✅ Artifacts uploaded successfully!"
     agents:
       queue: "default"
 
   - label: ":white_check_mark: Build Complete"
     depends_on: "upload-artifacts"
     command: |
-      echo ":tada: Android ROM build completed successfully!"
-      echo "Build Number: $BUILDKITE_BUILD_NUMBER"
-      echo "Commit: $BUILDKITE_COMMIT"
-      echo "Branch: $BUILDKITE_BRANCH"
+      echo "🎉 Android ROM build completed successfully!"
+      echo ""
+      echo "📊 Build Information:"
+      echo "  Build Number: ${BUILDKITE_BUILD_NUMBER}"
+      echo "  Commit: ${BUILDKITE_COMMIT}"
+      echo "  Branch: ${BUILDKITE_BRANCH}"
+      echo "  Device: ${TARGET_DEVICE:-generic}"
+      echo "  Variant: ${BUILD_VARIANT:-lineage}"
+      echo ""
+      echo "📱 Your ROM is ready for download in the Artifacts tab!"
     agents:
-      queue: "default" 
+      queue: "default"
+    env:
+      TARGET_DEVICE: "generic"
+      BUILD_VARIANT: "lineage" 
