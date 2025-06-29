@@ -274,19 +274,24 @@ steps:
       $$SUDO_CMD chmod a+x /usr/local/bin/repo
       
       # Verify repo installation
-      if ! repo --version &>/dev/null; then
-        echo "❌ Repo tool installation failed"
-        exit 1
+      if ! repo --version >/dev/null 2>&1; then
+        echo "❌ Repo tool installation failed - trying alternative installation..."
+        # Alternative installation method
+        $$SUDO_CMD python3 /usr/local/bin/repo --version >/dev/null 2>&1 || {
+          echo "❌ Repo tool completely failed to install"
+          exit 1
+        }
       fi
       
-      echo "✅ Repo tool installed: $$(repo --version | head -1)"
+      REPO_VERSION=$$(repo --version 2>/dev/null | head -1 || echo "repo installed but version unknown")
+      echo "✅ Repo tool installed: $$REPO_VERSION"
       
       # Configure ccache for build acceleration
       echo "🚀 Configuring ccache for optimal performance..."
       export USE_CCACHE=1
       export CCACHE_DIR="$$HOME/.ccache"
       mkdir -p "$$CCACHE_DIR"
-      ccache -M $$CCACHE_SIZE
+      ccache -M "$${CCACHE_SIZE:-30G}"
       ccache -s
       
       # Configure git for repo operations
