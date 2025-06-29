@@ -290,7 +290,7 @@ steps:
       git config --global user.email "$${GIT_EMAIL:-android-builder@buildkite.local}"
       git config --global user.name "$${GIT_NAME:-Buildkite Android Builder}"
       git config --global color.ui auto
-      git config --global init.defaultBranch main
+      git config --global init.defaultBranch master
       
       # Generate installation verification report
       {
