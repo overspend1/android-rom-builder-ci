@@ -4,17 +4,70 @@ out/
 ccache/
 artifacts/
 
-# Environment files
+# Environment files - CRITICAL: Never commit secrets!
 .env
+.env.*
 *-secrets.env
 *-private.env
+*-config.env
+*-credentials.env
 *.secret
+*.secrets
 config-*.env
+buildkite.env
+telegram.env
+slack.env
+
+# API Keys and Tokens - NEVER COMMIT THESE!
+*api*key*
+*token*
+*secret*
+*password*
+.credentials
+credentials.json
+service-account*.json
+auth.json
+
+# SSH Keys and Certificates
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+known_hosts
+authorized_keys
+
+# Android Signing Keys - EXTREMELY SENSITIVE!
+*.keystore
+*.jks
+platform.pk8
+platform.x509.pem
+testkey.pk8
+testkey.x509.pem
+releasekey.pk8
+releasekey.x509.pem
+*.pk8
+*.x509.pem
+signing/
+keys/
+keystore/
 
 # Docker volumes
 docker/source/
 docker/out/
 docker/ccache/
+
+# Personal Configuration Files
+.gitconfig
+.netrc
+.npmrc
+.pypirc
+personal-*.conf
+user-*.conf
 
 # OS generated files
 .DS_Store
@@ -31,15 +84,30 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
 
-# Log files
+# Log files with potential sensitive data
 *.log
 *.log.*
+debug.log
+error.log
+build.log
+sync.log
 
 # Temporary files
 *.tmp
 *.temp
 .cache/
+tmp/
+temp/
+
+# Backup files - may contain old sensitive data
+*.bak
+*.backup
+*.old
+*~
 
 # Security - Never commit API keys or secrets!
 # Always use empty values in committed config files
@@ -51,8 +119,89 @@ android/
 android-builds/
 logs/
 
-# Build artifacts
-*.zip
+# Build artifacts that may contain sensitive info
+# Large ROM builds - exclude by default
+*-rom.zip
+*-build.zip
+*-full.zip
+*-system.zip
+*-recovery.zip
+*-boot.zip
+out/*.zip
+artifacts/*.zip
+android-builds/*.zip
+
+# But allow small patches and release files
+# !patches/*.zip
+# !releases/*.zip
+# !updates/*.zip
+
 *.img
 *.md5
-*.sha256 
+
+# Large auto-generated checksums - exclude by default  
+out/*.sha256
+artifacts/*.sha256
+android-builds/*.sha256
+*-build.sha256
+*-rom.sha256
+
+# But allow release checksums
+# !releases/*.sha256
+# !patches/*.sha256
+# !RELEASE-*.sha256
+
+*.apk
+*.aab
+recovery.img
+boot.img
+system.img
+userdata.img
+cache.img
+vendor.img
+product.img
+
+# Database files that may contain sensitive data
+*.db
+*.sqlite
+*.sqlite3
+
+# Archive files that may contain sensitive data
+*.tar
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tgz
+*.tbz2
+*.txz
+*.rar
+*.7z
+
+# Configuration backups
+*.conf.bak
+*.config.bak
+*.cfg.bak
+
+# Telegram bot tokens and configs
+telegram-*.conf
+bot-token*
+chat-id*
+
+# Slack webhook URLs
+slack-webhook*
+webhook-url*
+
+# ROM-specific sensitive files
+device-*.mk.private
+vendor-*/proprietary/
+blobs/
+firmware/
+radio/
+
+# Personal notes that might contain sensitive info
+notes.txt
+todo.txt
+passwords.txt
+secrets.txt
+NOTES.md
+TODO.md 
