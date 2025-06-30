@@ -486,7 +486,26 @@ steps:
       
       echo "🔄 Enterprise Android source synchronization..."
       
+      # Ensure workspace directory exists (create if missing)
+      if [ ! -d android-workspace ]; then
+        echo "⚠️ Android workspace not found, creating it..."
+        mkdir -p android-workspace
+        echo "ℹ️ Note: This suggests the repository initialization step may not have completed"
+      fi
+      
       cd android-workspace
+      
+      # Check if repo is initialized, initialize if needed
+      if [ ! -d .repo ]; then
+        echo "⚠️ Repository not initialized, initializing now..."
+        if ! repo init -u "$$MANIFEST_URL" -b "$$MANIFEST_BRANCH" --depth=1; then
+          echo "❌ Failed to initialize repository"
+          exit 1
+        fi
+        echo "✅ Repository initialized"
+      else
+        echo "✅ Repository already initialized"
+      fi
       
       # Initialize sync monitoring
       START_TIME=$$(date +%s)
@@ -611,10 +630,24 @@ steps:
       
       if [ -n "$$DEVICE_TREE_URL" ]; then
         echo "📱 Cloning device tree from: $$DEVICE_TREE_URL"
-        DEVICE_PATH="device/$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
-        DEVICE_MANUFACTURER="$$(echo "$$DEVICE_PATH" | cut -d'/' -f2)"
+        # Extract device name from TARGET_DEVICE (lineage_garnet-userdebug -> garnet)
         DEVICE_NAME="$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
         
+        # Determine manufacturer based on device name
+        case "$$DEVICE_NAME" in
+          garnet)
+            DEVICE_MANUFACTURER="xiaomi"
+            ;;
+          *)
+            # Try to extract from device tree URL as fallback
+            DEVICE_MANUFACTURER="$$(echo "$$DEVICE_TREE_URL" | sed -n 's/.*android_device_\([^_]*\)_.*/\1/p')"
+            if [ -z "$$DEVICE_MANUFACTURER" ]; then
+              DEVICE_MANUFACTURER="unknown"
+            fi
+            ;;
+        esac
+        
+        echo "📱 Device: $$DEVICE_MANUFACTURER/$$DEVICE_NAME"
         mkdir -p "device/$$DEVICE_MANUFACTURER"
         if ! git clone "$$DEVICE_TREE_URL" -b "$$DEVICE_TREE_BRANCH" "device/$$DEVICE_MANUFACTURER/$$DEVICE_NAME" 2>&1 | tee -a "$$SYNC_LOG"; then
           echo "⚠️ Warning: Failed to clone device tree, continuing without it"
@@ -625,10 +658,21 @@ steps:
       
       if [ -n "$$KERNEL_SOURCE_URL" ]; then
         echo "🔧 Cloning kernel source from: $$KERNEL_SOURCE_URL"
-        KERNEL_PATH="kernel/$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
-        KERNEL_MANUFACTURER="$$(echo "$$KERNEL_PATH" | cut -d'/' -f2)"
+        # Use same manufacturer as device
         KERNEL_NAME="$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
+        case "$$KERNEL_NAME" in
+          garnet)
+            KERNEL_MANUFACTURER="xiaomi"
+            ;;
+          *)
+            KERNEL_MANUFACTURER="$$(echo "$$KERNEL_SOURCE_URL" | sed -n 's/.*android_kernel_\([^_]*\)_.*/\1/p')"
+            if [ -z "$$KERNEL_MANUFACTURER" ]; then
+              KERNEL_MANUFACTURER="unknown"
+            fi
+            ;;
+        esac
         
+        echo "🔧 Kernel: $$KERNEL_MANUFACTURER/$$KERNEL_NAME"
         mkdir -p "kernel/$$KERNEL_MANUFACTURER"
         if ! git clone "$$KERNEL_SOURCE_URL" -b "$$KERNEL_SOURCE_BRANCH" "kernel/$$KERNEL_MANUFACTURER/$$KERNEL_NAME" 2>&1 | tee -a "$$SYNC_LOG"; then
           echo "⚠️ Warning: Failed to clone kernel source, continuing without it"
@@ -639,10 +683,21 @@ steps:
       
       if [ -n "$$VENDOR_TREE_URL" ]; then
         echo "🏢 Cloning vendor blobs from: $$VENDOR_TREE_URL"
-        VENDOR_PATH="vendor/$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
-        VENDOR_MANUFACTURER="$$(echo "$$VENDOR_PATH" | cut -d'/' -f2)"
+        # Use same manufacturer as device
         VENDOR_NAME="$$(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)"
+        case "$$VENDOR_NAME" in
+          garnet)
+            VENDOR_MANUFACTURER="xiaomi"
+            ;;
+          *)
+            VENDOR_MANUFACTURER="$$(echo "$$VENDOR_TREE_URL" | sed -n 's/.*vendor_\([^_]*\)_.*/\1/p')"
+            if [ -z "$$VENDOR_MANUFACTURER" ]; then
+              VENDOR_MANUFACTURER="unknown"
+            fi
+            ;;
+        esac
         
+        echo "🏢 Vendor: $$VENDOR_MANUFACTURER/$$VENDOR_NAME"
         mkdir -p "vendor/$$VENDOR_MANUFACTURER"
         if ! git clone "$$VENDOR_TREE_URL" -b "$$VENDOR_TREE_BRANCH" "vendor/$$VENDOR_MANUFACTURER/$$VENDOR_NAME" 2>&1 | tee -a "$$SYNC_LOG"; then
           echo "⚠️ Warning: Failed to clone vendor tree, continuing without it"
