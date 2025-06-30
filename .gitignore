@@ -6,6 +6,10 @@ artifacts/
 
 # Environment files
 .env
+*-secrets.env
+*-private.env
+*.secret
+config-*.env
 
 # Docker volumes
 docker/source/
@@ -35,4 +39,20 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
-.cache/ 
+.cache/
+
+# Security - Never commit API keys or secrets!
+# Always use empty values in committed config files
+# Set actual values in Buildkite environment variables
+
+# Android workspace
+android-workspace/
+android/
+android-builds/
+logs/
+
+# Build artifacts
+*.zip
+*.img
+*.md5
+*.sha256 

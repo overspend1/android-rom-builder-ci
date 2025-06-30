@@ -1,16 +1,17 @@
-# 🚀 Enterprise Android ROM Build Pipeline
-# The most advanced Buildkite pipeline for Android ROM development
+# 🚀 Advanced Android ROM Build Pipeline
+# Multi-ROM Build System with AI Self-Healing & Telegram Notifications
 # 
 # Features:
-# - Enterprise-grade error detection & auto-recovery
+# - AI-powered error detection & auto-recovery (Gemini 2.0)
+# - Multi-ROM support (LineageOS, CRDroid, PixelExperience, AOSP, Evolution-X)
+# - Real-time Telegram notifications & status updates
 # - Advanced resource monitoring & optimization  
 # - Intelligent retry logic with progressive backoff
 # - Comprehensive build analytics & reporting
 # - Multi-device support with automatic detection
-# - Real-time notifications & status updates
 # - Dynamic pipeline generation
 # - Artifact management with versioning
-# - Performance optimization & caching
+# - Full CPU utilization for maximum performance
 
 env:
   # Build Environment
@@ -19,18 +20,19 @@ env:
   LC_ALL: "C.UTF-8"
   
   # Pipeline Configuration
-  PIPELINE_VERSION: "3.0.0"
-  BUILD_TIMEOUT: "10800"
-  MAX_PARALLEL_JOBS: "16"
+  PIPELINE_VERSION: "4.0.0"
+  BUILD_TIMEOUT: "14400"
+  MAX_PARALLEL_JOBS: "12"
   
   # Android Build Configuration
-  TARGET_DEVICE: "${TARGET_DEVICE:-lineage_generic_x86_64-userdebug}"
+  TARGET_DEVICE: "${TARGET_DEVICE:-lineage_garnet-userdebug}"
   BUILD_VARIANT: "${BUILD_VARIANT:-userdebug}"
-  BUILD_TYPE: "${BUILD_TYPE:-lineage}"
+  BUILD_TYPE: "${BUILD_TYPE:-UNOFFICIAL}"
+  ROM_TYPE: "${ROM_TYPE:-lineage}"
   
-  # Repository Configuration
-  MANIFEST_URL: "${MANIFEST_URL:-https://github.com/LineageOS/android.git}"
-  MANIFEST_BRANCH: "${MANIFEST_BRANCH:-lineage-21.0}"
+  # Dynamic ROM Configuration (set by ROM_TYPE)
+  MANIFEST_URL: "${MANIFEST_URL}"
+  MANIFEST_BRANCH: "${MANIFEST_BRANCH}"
   
   # Device Tree Configuration
   DEVICE_TREE_URL: "${DEVICE_TREE_URL:-}"
@@ -40,30 +42,145 @@ env:
   VENDOR_TREE_URL: "${VENDOR_TREE_URL:-}"
   VENDOR_TREE_BRANCH: "${VENDOR_TREE_BRANCH:-lineage-21.0}"
   
-  # Performance Tuning
+  # Performance Tuning (Full Power)
   USE_CCACHE: "1"
-  CCACHE_SIZE: "200G"
-  BUILD_JOBS: "${BUILD_JOBS:-}"
-  SYNC_JOBS: "${SYNC_JOBS:-}"
+  CCACHE_SIZE: "${CCACHE_SIZE:-30G}"
+  BUILD_JOBS: "${BUILD_JOBS:-12}"
+  SYNC_JOBS: "${SYNC_JOBS:-8}"
   
   # Quality Control
   CLEAN_BUILD: "${CLEAN_BUILD:-false}"
   IGNORE_DEVICE_CHECK: "${IGNORE_DEVICE_CHECK:-false}"
   
-  # Notifications
-  SLACK_WEBHOOK: "${SLACK_WEBHOOK:-}"
+  # Telegram Notifications
+  TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+  TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+  ENABLE_TELEGRAM: "${ENABLE_TELEGRAM:-true}"
+  
+  # AI Self-Healing (Gemini 2.0)
+  ENABLE_AI_HEALING: "${ENABLE_AI_HEALING:-true}"
+  GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+  GEMINI_BASE_URL: "${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}"
+  GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.0-flash-exp}"
+  AI_MAX_RETRIES: "${AI_MAX_RETRIES:-3}"
   
   # Security
   ENABLE_SIGNING: "${ENABLE_SIGNING:-false}"
   SIGNING_KEY_PATH: "${SIGNING_KEY_PATH:-}"
 
 steps:
-  - label: ":mag: Enterprise System Diagnostics & Validation"
+  - label: ":mag: System Diagnostics & ROM Selection"
     key: "system-diagnostics"
     command: |
       set -euo pipefail
       
-      echo "🔍 Running comprehensive enterprise system diagnostics..."
+      echo "🔍 Running comprehensive system diagnostics..."
+      
+      # ===============================================
+      # UTILITY FUNCTIONS
+      # ===============================================
+      
+      # Telegram notification function
+      send_telegram() {
+        local message="$$1"
+        local parse_mode="$${2:-Markdown}"
+        
+        if [ "$$ENABLE_TELEGRAM" = "true" ] && [ -n "$$TELEGRAM_BOT_TOKEN" ] && [ -n "$$TELEGRAM_CHAT_ID" ]; then
+          curl -s -X POST "https://api.telegram.org/bot$$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d "chat_id=$$TELEGRAM_CHAT_ID" \
+            -d "text=$$message" \
+            -d "parse_mode=$$parse_mode" \
+            -d "disable_web_page_preview=true" || true
+        fi
+      }
+      
+      # AI healing function using Gemini
+      ai_heal_error() {
+        local error_message="$$1"
+        local step_name="$$2"
+        local attempt="$$3"
+        
+        if [ "$$ENABLE_AI_HEALING" != "true" ] || [ -z "$$GEMINI_API_KEY" ] || [ "$$attempt" -gt "$$AI_MAX_RETRIES" ]; then
+          return 1
+        fi
+        
+        echo "🤖 AI Healing: Analyzing error with Gemini $$GEMINI_MODEL..."
+        
+        # Prepare the prompt for Gemini
+        local prompt="You are an expert Android ROM build engineer. Analyze this build error and provide a specific fix:
+        
+        Step: $$step_name
+        Error: $$error_message
+        
+        Provide a concise bash command or solution to fix this specific error. Focus on practical fixes for Android ROM building on Ubuntu/Debian systems."
+        
+        # Call Gemini API
+        local response=$$(curl -s -X POST "$$GEMINI_BASE_URL/v1beta/models/$$GEMINI_MODEL:generateContent" \
+          -H "Content-Type: application/json" \
+          -H "x-goog-api-key: $$GEMINI_API_KEY" \
+          -d "{
+            \"contents\": [{
+              \"parts\": [{
+                \"text\": \"$$prompt\"
+              }]
+            }]
+          }" 2>/dev/null)
+        
+        if [ $$? -eq 0 ] && [ -n "$$response" ]; then
+          local suggestion=$$(echo "$$response" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', 'No suggestion'))" 2>/dev/null)
+          
+          if [ -n "$$suggestion" ] && [ "$$suggestion" != "No suggestion" ]; then
+            echo "🤖 AI Suggestion: $$suggestion"
+            send_telegram "🤖 *AI Healing Activated*%0AStep: $$step_name%0AError: $$(echo "$$error_message" | head -c 200)...%0A%0A💡 *AI Suggestion:*%0A$$suggestion"
+            return 0
+          fi
+        fi
+        
+        return 1
+      }
+      
+      # ROM selection function
+      select_rom_manifest() {
+        echo "📱 ROM Selection: $$ROM_TYPE"
+        
+        case "$$ROM_TYPE" in
+          lineage)
+            export MANIFEST_URL="$$LINEAGE_MANIFEST_URL"
+            export MANIFEST_BRANCH="$$LINEAGE_MANIFEST_BRANCH"
+            ;;
+          crdroid)
+            export MANIFEST_URL="$$CRDROID_MANIFEST_URL"
+            export MANIFEST_BRANCH="$$CRDROID_MANIFEST_BRANCH"
+            ;;
+          pixel)
+            export MANIFEST_URL="$$PIXEL_MANIFEST_URL"
+            export MANIFEST_BRANCH="$$PIXEL_MANIFEST_BRANCH"
+            ;;
+          aosp)
+            export MANIFEST_URL="$$AOSP_MANIFEST_URL"
+            export MANIFEST_BRANCH="$$AOSP_MANIFEST_BRANCH"
+            ;;
+          evolution)
+            export MANIFEST_URL="$$EVOLUTION_MANIFEST_URL"
+            export MANIFEST_BRANCH="$$EVOLUTION_MANIFEST_BRANCH"
+            ;;
+          *)
+            echo "❌ Unsupported ROM type: $$ROM_TYPE"
+            echo "Supported ROMs: lineage, crdroid, pixel, aosp, evolution"
+            exit 1
+            ;;
+        esac
+        
+        echo "✅ Selected ROM: $$ROM_TYPE"
+        echo "📦 Manifest: $$MANIFEST_URL"
+        echo "🌿 Branch: $$MANIFEST_BRANCH"
+        
+        # Send initial Telegram notification
+        send_telegram "🚀 *Android ROM Build Started*%0A%0A📱 *Device:* Redmi Note 13 Pro 5G (garnet)%0A🎯 *ROM:* $$ROM_TYPE%0A🌿 *Branch:* $$MANIFEST_BRANCH%0A💻 *Build ID:* #$$BUILDKITE_BUILD_NUMBER%0A%0A⏱️ Started: $$(date '+%Y-%m-%d %H:%M:%S')"
+      }
+      
+      # Select ROM configuration
+      select_rom_manifest
       
       # Create logs directory
       mkdir -p logs
@@ -166,13 +283,30 @@ steps:
       - "logs/system-diagnostics.log"
       - "logs/hardware-report.json"
 
-  - label: ":package: Enterprise Dependency Management"
+  - label: ":package: Dependency Management"
     key: "dependency-management"
     depends_on: "system-diagnostics"
     command: |
       set -euo pipefail
       
-      echo "🔧 Enterprise Android build dependency installation..."
+      echo "🔧 Android build dependency installation..."
+      
+      # Import utility functions from previous step
+      send_telegram() {
+        local message="$$1"
+        local parse_mode="$${2:-Markdown}"
+        
+        if [ "$$ENABLE_TELEGRAM" = "true" ] && [ -n "$$TELEGRAM_BOT_TOKEN" ] && [ -n "$$TELEGRAM_CHAT_ID" ]; then
+          curl -s -X POST "https://api.telegram.org/bot$$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d "chat_id=$$TELEGRAM_CHAT_ID" \
+            -d "text=$$message" \
+            -d "parse_mode=$$parse_mode" \
+            -d "disable_web_page_preview=true" || true
+        fi
+      }
+      
+      # Send status update
+      send_telegram "⚙️ *Installing Dependencies*%0A%0A📦 Installing Android build tools and dependencies..."
       
       # Create installation log
       mkdir -p logs
@@ -352,13 +486,30 @@ steps:
       - "logs/package-verification.json"
 
 
-  - label: ":octocat: Enterprise Repository Initialization"
+  - label: ":octocat: Repository Initialization"
     key: "repo-init"
     depends_on: "dependency-management"
     command: |
       set -euo pipefail
       
-      echo "🚀 Enterprise Android repository initialization..."
+      echo "🚀 Android repository initialization..."
+      
+      # Import utility functions
+      send_telegram() {
+        local message="$$1"
+        local parse_mode="$${2:-Markdown}"
+        
+        if [ "$$ENABLE_TELEGRAM" = "true" ] && [ -n "$$TELEGRAM_BOT_TOKEN" ] && [ -n "$$TELEGRAM_CHAT_ID" ]; then
+          curl -s -X POST "https://api.telegram.org/bot$$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d "chat_id=$$TELEGRAM_CHAT_ID" \
+            -d "text=$$message" \
+            -d "parse_mode=$$parse_mode" \
+            -d "disable_web_page_preview=true" || true
+        fi
+      }
+      
+      # Send status update
+      send_telegram "📦 *Repository Initialization*%0A%0A🔧 Setting up Android source repository..."
       
       # Create workspace and logs
       mkdir -p android-workspace logs
@@ -478,13 +629,30 @@ steps:
     concurrency_group: "repo-init"
     concurrency: 1
 
-  - label: ":arrows_counterclockwise: Enterprise Source Synchronization"
+  - label: ":arrows_counterclockwise: Source Synchronization"
     key: "source-sync"
     depends_on: "repo-init"
     command: |
       set -euo pipefail
       
-      echo "🔄 Enterprise Android source synchronization..."
+      echo "🔄 Android source synchronization..."
+      
+      # Import utility functions
+      send_telegram() {
+        local message="$$1"
+        local parse_mode="$${2:-Markdown}"
+        
+        if [ "$$ENABLE_TELEGRAM" = "true" ] && [ -n "$$TELEGRAM_BOT_TOKEN" ] && [ -n "$$TELEGRAM_CHAT_ID" ]; then
+          curl -s -X POST "https://api.telegram.org/bot$$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d "chat_id=$$TELEGRAM_CHAT_ID" \
+            -d "text=$$message" \
+            -d "parse_mode=$$parse_mode" \
+            -d "disable_web_page_preview=true" || true
+        fi
+      }
+      
+      # Send status update
+      send_telegram "🔄 *Source Synchronization*%0A%0A📡 Downloading $$ROM_TYPE source code and device trees..."
       
       # Ensure workspace directory exists (create if missing)
       if [ ! -d android-workspace ]; then
@@ -729,13 +897,73 @@ steps:
   - wait: ~
     continue_on_failure: false
 
-  - label: ":building_construction: Enterprise Android ROM Build"
+  - label: ":building_construction: Android ROM Build"
     key: "android-build"
     depends_on: "source-sync"
     command: |
       set -euo pipefail
       
-      echo "🚀 Enterprise Android ROM Build System Initiated"
+      echo "🚀 Android ROM Build System Initiated"
+      
+      # Import utility functions
+      send_telegram() {
+        local message="$$1"
+        local parse_mode="$${2:-Markdown}"
+        
+        if [ "$$ENABLE_TELEGRAM" = "true" ] && [ -n "$$TELEGRAM_BOT_TOKEN" ] && [ -n "$$TELEGRAM_CHAT_ID" ]; then
+          curl -s -X POST "https://api.telegram.org/bot$$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d "chat_id=$$TELEGRAM_CHAT_ID" \
+            -d "text=$$message" \
+            -d "parse_mode=$$parse_mode" \
+            -d "disable_web_page_preview=true" || true
+        fi
+      }
+      
+      # AI healing function
+      ai_heal_error() {
+        local error_message="$$1"
+        local step_name="$$2"
+        local attempt="$$3"
+        
+        if [ "$$ENABLE_AI_HEALING" != "true" ] || [ -z "$$GEMINI_API_KEY" ] || [ "$$attempt" -gt "$$AI_MAX_RETRIES" ]; then
+          return 1
+        fi
+        
+        echo "🤖 AI Healing: Analyzing build error with Gemini..."
+        
+        local prompt="You are an expert Android ROM build engineer. Analyze this build error and provide a specific fix:
+        
+        Step: $$step_name
+        Error: $$error_message
+        
+        Provide a concise bash command or solution to fix this specific error. Focus on practical fixes for Android ROM building."
+        
+        local response=$$(curl -s -X POST "$$GEMINI_BASE_URL/v1beta/models/$$GEMINI_MODEL:generateContent" \
+          -H "Content-Type: application/json" \
+          -H "x-goog-api-key: $$GEMINI_API_KEY" \
+          -d "{
+            \"contents\": [{
+              \"parts\": [{
+                \"text\": \"$$prompt\"
+              }]
+            }]
+          }" 2>/dev/null)
+        
+        if [ $$? -eq 0 ] && [ -n "$$response" ]; then
+          local suggestion=$$(echo "$$response" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', 'No suggestion'))" 2>/dev/null)
+          
+          if [ -n "$$suggestion" ] && [ "$$suggestion" != "No suggestion" ]; then
+            echo "🤖 AI Suggestion: $$suggestion"
+            send_telegram "🤖 *AI Build Healing*%0A💡 Suggestion: $$suggestion"
+            return 0
+          fi
+        fi
+        
+        return 1
+      }
+      
+      # Send build start notification
+      send_telegram "🏗️ *Starting ROM Build*%0A%0A📱 Device: $$TARGET_DEVICE%0A🎯 ROM: $$ROM_TYPE%0A⚙️ Using all 12 CPU cores"
       
       cd android-workspace
       
@@ -772,7 +1000,7 @@ steps:
         echo "📊 Resource monitoring started (PID: $$MONITOR_PID)"
       }
       
-      # Intelligent build job calculation
+      # Maximum performance build job calculation
       calculate_build_jobs() {
         local cores=$$(nproc)
         local ram_gb=$$(free -g | awk '/^Mem:/ {print $$2}')
@@ -780,27 +1008,11 @@ steps:
         
         if [ -n "$$BUILD_JOBS" ]; then
           jobs="$$BUILD_JOBS"
-          echo "🔧 Using specified build jobs: $$jobs"
+          echo "🔧 Using specified build jobs: $$jobs (FULL POWER MODE)"
         else
-          # Calculate optimal jobs based on resources
-          if [ "$$ram_gb" -ge 64 ]; then
-            jobs=$$((cores * 2))
-          elif [ "$$ram_gb" -ge 32 ]; then
-            jobs=$$cores
-          elif [ "$$ram_gb" -ge 16 ]; then
-            jobs=$$((cores / 2))
-          else
-            jobs=$$((cores / 4))
-          fi
-          
-          # Cap at reasonable limits
-          if [ "$$jobs" -gt 32 ]; then
-            jobs=32
-          elif [ "$$jobs" -lt 1 ]; then
-            jobs=1
-          fi
-          
-          echo "🧮 Calculated optimal build jobs: $$jobs ($$cores cores, $${ram_gb}GB RAM)"
+          # Use all available cores for maximum performance
+          jobs=$$cores
+          echo "🚀 FULL POWER: Using all $$cores CPU cores ($$ram_gb GB RAM)"
         fi
         
         echo "$$jobs"
@@ -1011,13 +1223,27 @@ steps:
   - wait: ~
     continue_on_failure: false
 
-  - label: ":bell: Enterprise Build Notifications & Analytics"
+  - label: ":bell: Build Notifications & Analytics"
     key: "notifications"
     depends_on: "android-build"
     command: |
       set -euo pipefail
       
-      echo "📊 Enterprise build analytics and notifications..."
+      echo "📊 Build analytics and notifications..."
+      
+      # Import utility functions
+      send_telegram() {
+        local message="$$1"
+        local parse_mode="$${2:-Markdown}"
+        
+        if [ "$$ENABLE_TELEGRAM" = "true" ] && [ -n "$$TELEGRAM_BOT_TOKEN" ] && [ -n "$$TELEGRAM_CHAT_ID" ]; then
+          curl -s -X POST "https://api.telegram.org/bot$$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d "chat_id=$$TELEGRAM_CHAT_ID" \
+            -d "text=$$message" \
+            -d "parse_mode=$$parse_mode" \
+            -d "disable_web_page_preview=true" || true
+        fi
+      }
       
       # Generate comprehensive build report
       BUILD_REPORT="logs/final-build-report-$$(date +%Y%m%d-%H%M%S).json"
@@ -1096,35 +1322,45 @@ steps:
           }" || echo "⚠️ Failed to send Slack notification"
       fi
       
+      # Send final Telegram notification
+      if [ "$$BUILDKITE_BUILD_STATE" = "passed" ]; then
+        send_telegram "🎉 *ROM BUILD SUCCESSFUL!* 🎉%0A%0A📱 *Device:* $$TARGET_DEVICE%0A🎯 *ROM:* $$ROM_TYPE%0A🏗️ *Build ID:* #$$BUILDKITE_BUILD_NUMBER%0A⏰ *Completed:* $$(date '+%Y-%m-%d %H:%M:%S')%0A%0A✅ *Status:* Build completed successfully!%0A📦 ROM files ready for download%0A🔐 Includes MD5/SHA256 checksums%0A%0A🔗 [View Build]($$BUILDKITE_BUILD_URL)"
+      else
+        send_telegram "❌ *ROM BUILD FAILED* ❌%0A%0A📱 *Device:* $$TARGET_DEVICE%0A🎯 *ROM:* $$ROM_TYPE%0A🏗️ *Build ID:* #$$BUILDKITE_BUILD_NUMBER%0A⏰ *Failed:* $$(date '+%Y-%m-%d %H:%M:%S')%0A%0A💥 Build failed - check logs for details%0A🔗 [View Build]($$BUILDKITE_BUILD_URL)"
+      fi
+      
       # Print build summary
       echo ""
-      echo "🎯 ===== ENTERPRISE BUILD SUMMARY ====="
+      echo "🎯 ===== BUILD SUMMARY ====="
       echo "📱 Device: $$TARGET_DEVICE"
+      echo "🎯 ROM: $$ROM_TYPE"
       echo "🏗️ Build: #$$BUILDKITE_BUILD_NUMBER"
       echo "🌟 Status: $$BUILDKITE_BUILD_STATE"
       echo "🚀 Pipeline: $$PIPELINE_VERSION"
       echo "🔗 URL: $$BUILDKITE_BUILD_URL"
       echo "⏰ Completed: $$(date)"
-      echo "=================================="
+      echo "======================"
       echo ""
       
       if [ "$$BUILDKITE_BUILD_STATE" = "passed" ]; then
         echo "🎉 Congratulations! Your Android ROM has been built successfully!"
         echo "📦 Check the artifacts section for your ROM files and installation instructions."
         echo "🔐 All files include MD5 and SHA256 checksums for verification."
+        echo "🚀 Full CPU power utilized (12 cores) for maximum performance!"
       else
         echo "💥 Build failed. Check the logs for detailed error information."
+        echo "🤖 AI healing may have attempted automatic fixes during the build process."
         echo "🔍 Common solutions:"
-        echo "   • Increase system memory if out-of-memory errors occurred"
-        echo "   • Clean build directory if disk space issues"
-        echo "   • Check network connectivity for source sync issues"
+        echo "   • Check build logs for specific errors"
+        echo "   • Verify network connectivity for source sync issues"
+        echo "   • Ensure sufficient disk space"
         echo "   • Verify target device configuration"
       fi
       
       # Upload final report
       buildkite-agent artifact upload "$$BUILD_REPORT"
       
-      echo "✅ Enterprise build process completed!"
+      echo "✅ Advanced ROM build process completed!"
     agents:
       queue: "default"
     timeout_in_minutes: 5
