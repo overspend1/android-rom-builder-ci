@@ -273,25 +273,32 @@ steps:
       $$SUDO_CMD mv /tmp/repo /usr/local/bin/repo
       $$SUDO_CMD chmod a+x /usr/local/bin/repo
       
-      # Verify repo installation
-      if ! repo --version >/dev/null 2>&1; then
-        echo "❌ Repo tool installation failed - trying alternative installation..."
-        # Alternative installation method
-        $$SUDO_CMD python3 /usr/local/bin/repo --version >/dev/null 2>&1 || {
-          echo "❌ Repo tool completely failed to install"
-          exit 1
-        }
-      fi
+      # Verify repo installation and fix PATH if needed
+      echo "🔍 Verifying repo tool installation..."
+      export PATH="/usr/local/bin:$$PATH"
       
-      REPO_VERSION=$$(repo --version 2>/dev/null | head -1 || echo "repo installed but version unknown")
-      echo "✅ Repo tool installed: $$REPO_VERSION"
+      # Test repo tool
+      if repo --version >/dev/null 2>&1; then
+        REPO_VERSION=$$(repo --version 2>/dev/null | head -1)
+        echo "✅ Repo tool installed: $$REPO_VERSION"
+      elif python3 /usr/local/bin/repo --version >/dev/null 2>&1; then
+        echo "✅ Repo tool installed: $$(python3 /usr/local/bin/repo --version 2>/dev/null | head -1)"
+      else
+        echo "❌ Repo tool installation failed"
+        echo "Checking if repo file exists: $$(ls -la /usr/local/bin/repo 2>/dev/null || echo 'not found')"
+        exit 1
+      fi
       
       # Configure ccache for build acceleration
       echo "🚀 Configuring ccache for optimal performance..."
       export USE_CCACHE=1
       export CCACHE_DIR="$$HOME/.ccache"
       mkdir -p "$$CCACHE_DIR"
-      ccache -M "$${CCACHE_SIZE:-30G}"
+      
+      # Clean CCACHE_SIZE value (remove any comments)
+      CLEAN_CCACHE_SIZE=$$(echo "$${CCACHE_SIZE:-30G}" | awk '{print $$1}' | tr -d '"')
+      echo "Setting ccache size to: $$CLEAN_CCACHE_SIZE"
+      ccache -M "$$CLEAN_CCACHE_SIZE"
       ccache -s
       
       # Configure git for repo operations
