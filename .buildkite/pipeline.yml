@@ -509,6 +509,7 @@ steps:
       
       # Initialize sync monitoring
       START_TIME=$$(date +%s)
+      mkdir -p ../logs
       SYNC_LOG="../logs/sync-$$(date +%Y%m%d-%H%M%S).log"
       
       {
