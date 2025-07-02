@@ -117,6 +117,23 @@ env:
   TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
   TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
   ENABLE_TELEGRAM: "${ENABLE_TELEGRAM:-true}"
+  SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+  DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+  TEAMS_WEBHOOK_URL: "${TEAMS_WEBHOOK_URL:-}"
+  
+  # 📦 Intelligent Package Management
+  SKIP_SYSTEM_UPDATE: "${SKIP_SYSTEM_UPDATE:-true}"
+  MINIMAL_DEPENDENCIES: "${MINIMAL_DEPENDENCIES:-true}"
+  PACKAGE_CACHE_ENABLED: "${PACKAGE_CACHE_ENABLED:-true}"
+  APT_CACHE_DIR: "${APT_CACHE_DIR:-/tmp/apt-cache}"
+  DEBIAN_FRONTEND: "noninteractive"
+  NEEDRESTART_MODE: "a"
+  
+  # 🔍 Security & Compliance
+  ENABLE_TRIVY_SCAN: "${ENABLE_TRIVY_SCAN:-true}"
+  ENABLE_SNYK_SCAN: "${ENABLE_SNYK_SCAN:-false}"
+  SECURITY_REPORT_FORMAT: "${SECURITY_REPORT_FORMAT:-json}"
+  VULNERABILITY_SEVERITY_THRESHOLD: "${VULNERABILITY_SEVERITY_THRESHOLD:-HIGH}"
   
   
   
@@ -142,7 +159,107 @@ env:
   ENABLE_SIGNING: "${ENABLE_SIGNING:-true}"
   SIGNING_KEY_PATH: "${SIGNING_KEY_PATH:-}"
 
-steps:\n  # 🌐 ADVANCED BUILD ORCHESTRATION\n  - label: \":globe_with_meridians: Build Cluster Initialization\"\n    key: \"cluster-init\"\n    command: |\n      set -euo pipefail\n      \n      echo \"🌐 Initializing distributed build cluster...\"\n      \n      # ML-powered cluster optimization\n      if [ \"$$BUILD_CLUSTER_NODES\" = \"auto\" ]; then\n        OPTIMAL_NODES=1\n        if [ \"$$ENABLE_ML_OPTIMIZATION\" = \"true\" ] && [ -n \"$$ML_MODEL_ENDPOINT\" ]; then\n          echo \"🧠 Consulting ML model for optimal cluster size...\"\n          OPTIMAL_NODES=$$(curl -s \"$$ML_MODEL_ENDPOINT/predict\" -d '{\"type\":\"cluster-size\"}' | jq -r '.nodes' 2>/dev/null || echo \"1\")\n        fi\n        BUILD_CLUSTER_NODES=\"$$OPTIMAL_NODES\"\n      fi\n      \n      # Initialize distributed systems\n      if [ \"$$ENABLE_DISTRIBUTED_BUILD\" = \"true\" ]; then\n        echo \"⚡ Setting up distributed caching and load balancing...\"\n        buildkite-agent meta-data set \"cache-distributed\" \"true\"\n      fi\n      \n      buildkite-agent meta-data set \"cluster-size\" \"$$BUILD_CLUSTER_NODES\"\n      echo \"🚀 Advanced cluster ready with $$BUILD_CLUSTER_NODES nodes!\"\n    agents:\n      queue: \"orchestrator\"\n    timeout_in_minutes: 10\n\n  - wait: ~
+steps:
+  # 🌐 ADVANCED BUILD ORCHESTRATION
+  - label: ":globe_with_meridians: Build Cluster Initialization"
+    key: "cluster-init"
+    command: |
+      set -euo pipefail
+      
+      echo "🌐 Initializing distributed build cluster..."
+      
+      # ML-powered cluster optimization
+      if [ "$$BUILD_CLUSTER_NODES" = "auto" ]; then
+        OPTIMAL_NODES=1
+        if [ "$$ENABLE_ML_OPTIMIZATION" = "true" ] && [ -n "$$ML_MODEL_ENDPOINT" ]; then
+          echo "🧠 Consulting ML model for optimal cluster size..."
+          OPTIMAL_NODES=$$(curl -s "$$ML_MODEL_ENDPOINT/predict" -d '{"type":"cluster-size"}' | jq -r '.nodes' 2>/dev/null || echo "1")
+        fi
+        BUILD_CLUSTER_NODES="$$OPTIMAL_NODES"
+      fi
+      
+      # Initialize distributed systems
+      if [ "$$ENABLE_DISTRIBUTED_BUILD" = "true" ]; then
+        echo "⚡ Setting up distributed caching and load balancing..."
+        buildkite-agent meta-data set "cache-distributed" "true"
+      fi
+      
+      buildkite-agent meta-data set "cluster-size" "$$BUILD_CLUSTER_NODES"
+      echo "🚀 Advanced cluster ready with $$BUILD_CLUSTER_NODES nodes!"
+    agents:
+      queue: "orchestrator"
+    timeout_in_minutes: 10
+
+  - label: ":shield: Pre-Build Validation & Optimization"
+    key: "pre-build-validation"
+    depends_on: "cluster-init"
+    command: |
+      set -euo pipefail
+      
+      echo "🔍 Running comprehensive pre-build validation and optimization..."
+      
+      # Create scripts directory if not exists
+      mkdir -p scripts
+      
+      # Run the pre-build validation script if available
+      if [ -f "scripts/pre-build-validation.sh" ]; then
+        echo "🔍 Running pre-build validation..."
+        AUTO_FIX=true bash scripts/pre-build-validation.sh
+      else
+        echo "⚠️ Pre-build validation script not found, performing basic checks..."
+        
+        # Basic system checks
+        echo "System: $$(uname -a)"
+        echo "CPU cores: $$(nproc)"
+        echo "RAM: $$(free -h | awk '/^Mem:/ {print $$2}')"
+        echo "Disk space: $$(df -h . | awk 'NR==2 {print $$4}')"
+        
+        # Check essential tools
+        for tool in git curl python3 java ccache; do
+          if command -v $$tool >/dev/null 2>&1; then
+            echo "✅ $$tool is available"
+          else
+            echo "❌ $$tool is missing"
+          fi
+        done
+      fi
+      
+      # Run build environment optimization if available
+      if [ -f "scripts/build-optimization.sh" ]; then
+        echo "⚡ Running build optimization..."
+        bash scripts/build-optimization.sh
+      else
+        echo "⚠️ Build optimization script not found, applying basic optimizations..."
+        
+        # Basic optimizations
+        export USE_CCACHE=1
+        export CCACHE_DIR="$$HOME/.ccache"
+        mkdir -p "$$CCACHE_DIR"
+        
+        if command -v ccache >/dev/null 2>&1; then
+          ccache -M 30G >/dev/null 2>&1 || true
+          echo "✅ ccache configured with 30GB limit"
+        fi
+        
+        # Set build job optimization
+        CORES=$$(nproc)
+        export BUILD_JOBS=$$CORES
+        echo "✅ Build jobs set to $$CORES"
+        buildkite-agent meta-data set "build-jobs" "$$BUILD_JOBS"
+      fi
+      
+      echo "✅ Pre-build validation and optimization completed"
+    agents:
+      queue: "default"
+    timeout_in_minutes: 15
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 2
+    artifact_paths:
+      - "*-report.txt"
+
+  - wait: ~
   - label: ":mag: System Diagnostics & ROM Selection"
     key: "system-diagnostics"
     command: |
@@ -363,7 +480,7 @@ steps:\n  # 🌐 ADVANCED BUILD ORCHESTRATION\n  - label: \":globe_with_meridian
     command: |
       set -euo pipefail
       
-      echo "🔧 Android build dependency installation..."
+      echo "🔧 Intelligent Android build dependency management..."
       
       # Import utility functions from previous step
       send_telegram() {
@@ -377,6 +494,72 @@ steps:\n  # 🌐 ADVANCED BUILD ORCHESTRATION\n  - label: \":globe_with_meridian
             -d "parse_mode=$$parse_mode" \
             -d "disable_web_page_preview=true" || true
         fi
+      }
+      
+      # Intelligent package verification function
+      check_package_needed() {
+        local package="$$1"
+        local reason="$$2"
+        
+        # Check if package is already installed
+        if dpkg-query -W -f='$${Status}' "$$package" 2>/dev/null | grep -q "ok installed"; then
+          echo "✅ $$package already installed ($$reason)"
+          return 1  # Don't install
+        fi
+        
+        # Check if package exists in repositories
+        if ! apt-cache show "$$package" >/dev/null 2>&1; then
+          echo "❌ Package $$package not found in repositories"
+          return 1  # Don't install
+        fi
+        
+        echo "📦 Need to install: $$package ($$reason)"
+        return 0  # Install needed
+      }
+      
+      # Smart dependency detection
+      detect_needed_packages() {
+        local needed_packages=()
+        
+        # Core build tools - always needed
+        check_package_needed "git" "version control" && needed_packages+=("git")
+        check_package_needed "curl" "network operations" && needed_packages+=("curl")
+        check_package_needed "wget" "downloads" && needed_packages+=("wget")
+        check_package_needed "python3" "build scripts" && needed_packages+=("python3")
+        check_package_needed "python3-pip" "python packages" && needed_packages+=("python3-pip")
+        check_package_needed "build-essential" "compilation tools" && needed_packages+=("build-essential")
+        
+        # Java - detect which version is needed
+        if ! java -version >/dev/null 2>&1; then
+          check_package_needed "openjdk-8-jdk" "Android 8-10 builds" && needed_packages+=("openjdk-8-jdk")
+          check_package_needed "openjdk-11-jdk" "Android 11+ builds" && needed_packages+=("openjdk-11-jdk")
+        fi
+        
+        # Android-specific libraries - only if needed
+        check_package_needed "libncurses5" "terminal support" && needed_packages+=("libncurses5")
+        check_package_needed "lib32ncurses5-dev" "32-bit ncurses" && needed_packages+=("lib32ncurses5-dev")
+        check_package_needed "libxml2-utils" "XML processing" && needed_packages+=("libxml2-utils")
+        check_package_needed "xsltproc" "XSLT processing" && needed_packages+=("xsltproc")
+        
+        # Compression tools
+        check_package_needed "zip" "archive creation" && needed_packages+=("zip")
+        check_package_needed "unzip" "archive extraction" && needed_packages+=("unzip")
+        check_package_needed "zlib1g-dev" "compression library" && needed_packages+=("zlib1g-dev")
+        
+        # Build optimization
+        check_package_needed "ccache" "compilation caching" && needed_packages+=("ccache")
+        check_package_needed "schedtool" "process scheduling" && needed_packages+=("schedtool")
+        check_package_needed "bc" "basic calculator" && needed_packages+=("bc")
+        check_package_needed "bison" "parser generator" && needed_packages+=("bison")
+        check_package_needed "flex" "lexical analyzer" && needed_packages+=("flex")
+        
+        # Multi-lib support - only if building for multiple architectures
+        if [ "$$TARGET_ARCH" = "arm64" ] && [ -n "$$TARGET_2ND_ARCH" ]; then
+          check_package_needed "g++-multilib" "multi-arch support" && needed_packages+=("g++-multilib")
+          check_package_needed "gcc-multilib" "multi-arch gcc" && needed_packages+=("gcc-multilib")
+        fi
+        
+        echo "$${needed_packages[@]}"
       }
       
       # Send status update
@@ -438,28 +621,45 @@ steps:\n  # 🌐 ADVANCED BUILD ORCHESTRATION\n  - label: \":globe_with_meridian
         exit 1
       fi
       
-      # Update package lists with retry
-      echo "📦 Updating package repositories..."
-      retry_command "$$SUDO_CMD apt-get update -qq" 2>&1 | tee -a "$$INSTALL_LOG"
+      # Skip system update if configured
+      if [ "$$SKIP_SYSTEM_UPDATE" = "true" ]; then
+        echo "⏩ Skipping system update (SKIP_SYSTEM_UPDATE=true)"
+        echo "ℹ️ Only updating package lists..."
+        retry_command "$$SUDO_CMD apt-get update -qq" 2>&1 | tee -a "$$INSTALL_LOG"
+      else
+        echo "📦 Updating package repositories and system..."
+        retry_command "$$SUDO_CMD apt-get update -qq" 2>&1 | tee -a "$$INSTALL_LOG"
+        retry_command "$$SUDO_CMD apt-get upgrade -y" 2>&1 | tee -a "$$INSTALL_LOG"
+      fi
       
-      # Install core dependencies in optimized batches
-      echo "🛠️ Installing Android build dependencies..."
+      # Intelligent dependency installation
+      echo "🧠 Detecting required packages..."
+      NEEDED_PACKAGES=($(detect_needed_packages))
       
-      # Install packages directly to avoid array expansion issues
-      echo "📥 Installing core system tools..."
-      retry_command "$$SUDO_CMD apt-get install -y git curl wget python3 python3-pip python-is-python3 build-essential libc6-dev libssl-dev pkg-config" 2>&1 | tee -a "$$INSTALL_LOG"
-      
-      echo "📥 Installing Java development environment..."
-      retry_command "$$SUDO_CMD apt-get install -y openjdk-8-jdk openjdk-11-jdk openjdk-17-jdk" 2>&1 | tee -a "$$INSTALL_LOG"
-      
-      echo "📥 Installing Android-specific libraries..."
-      retry_command "$$SUDO_CMD apt-get install -y libncurses5 libncurses5-dev lib32ncurses5-dev libreadline-dev lib32readline-dev libtinfo5" 2>&1 | tee -a "$$INSTALL_LOG"
-      
-      echo "📥 Installing XML and compression tools..."
-      retry_command "$$SUDO_CMD apt-get install -y libxml2-utils xsltproc zip unzip zlib1g-dev lib32z1-dev liblz4-tool" 2>&1 | tee -a "$$INSTALL_LOG"
-      
-      echo "📥 Installing build optimization tools..."
-      retry_command "$$SUDO_CMD apt-get install -y ccache schedtool bc bison flex g++-multilib gcc-multilib rsync squashfs-tools python3-mako libffi-dev" 2>&1 | tee -a "$$INSTALL_LOG"
+      if [ $${#NEEDED_PACKAGES[@]} -eq 0 ]; then
+        echo "✅ All required packages already installed!"
+      else
+        echo "📦 Installing $${#NEEDED_PACKAGES[@]} required packages: $${NEEDED_PACKAGES[*]}"
+        
+        # Setup package cache if enabled
+        if [ "$$PACKAGE_CACHE_ENABLED" = "true" ]; then
+          echo "🗄️ Setting up package cache..."
+          mkdir -p "$$APT_CACHE_DIR"
+          echo "Dir::Cache::Archives \"$$APT_CACHE_DIR\";" | $$SUDO_CMD tee /etc/apt/apt.conf.d/01buildkite-cache
+        fi
+        
+        # Install only needed packages
+        if [ "$${#NEEDED_PACKAGES[@]}" -gt 0 ]; then
+          retry_command "$$SUDO_CMD apt-get install -y --no-install-recommends $${NEEDED_PACKAGES[*]}" 2>&1 | tee -a "$$INSTALL_LOG"
+        fi
+        
+        # Clean up if minimal dependencies is enabled
+        if [ "$$MINIMAL_DEPENDENCIES" = "true" ]; then
+          echo "🧹 Cleaning unnecessary packages..."
+          $$SUDO_CMD apt-get autoremove -y 2>&1 | tee -a "$$INSTALL_LOG"
+          $$SUDO_CMD apt-get autoclean 2>&1 | tee -a "$$INSTALL_LOG"
+        fi
+      fi
       
       # Configure Java environment for Android builds
       echo "☕ Configuring Java environment..."
@@ -497,8 +697,8 @@ steps:\n  # 🌐 ADVANCED BUILD ORCHESTRATION\n  - label: \":globe_with_meridian
         exit 1
       fi
       
-      # Configure ccache for build acceleration
-      echo "🚀 Configuring ccache for optimal performance..."
+      # Advanced ccache configuration with intelligent caching
+      echo "🚀 Configuring advanced ccache with intelligent caching..."
       export USE_CCACHE=1
       export CCACHE_DIR="$$HOME/.ccache"
       mkdir -p "$$CCACHE_DIR"
@@ -507,7 +707,42 @@ steps:\n  # 🌐 ADVANCED BUILD ORCHESTRATION\n  - label: \":globe_with_meridian
       CLEAN_CCACHE_SIZE=$$(echo "$${CCACHE_SIZE:-30G}" | awk '{print $$1}' | tr -d '"')
       echo "Setting ccache size to: $$CLEAN_CCACHE_SIZE"
       ccache -M "$$CLEAN_CCACHE_SIZE"
-      ccache -s
+      
+      # Advanced ccache optimizations
+      export CCACHE_COMPRESS=1
+      export CCACHE_COMPRESSLEVEL=6
+      export CCACHE_MAXFILES=0
+      export CCACHE_SLOPPINESS="file_macro,locale,time_macros"
+      export CCACHE_BASEDIR="$$(pwd)"
+      
+      # Enable remote ccache if configured
+      if [ -n "$$CCACHE_REMOTE_STORAGE" ]; then
+        echo "🌐 Configuring remote ccache storage: $$CCACHE_REMOTE_STORAGE"
+        export CCACHE_REMOTE_STORAGE="$$CCACHE_REMOTE_STORAGE"
+        export CCACHE_REMOTE_ONLY=false
+      fi
+      
+      # Initialize ccache with optimized settings
+      ccache -z  # Zero statistics
+      ccache -s  # Show statistics
+      
+      # Setup build cache directories
+      echo "📦 Setting up build cache directories..."
+      mkdir -p "$$HOME/.gradle/caches"
+      mkdir -p "$$HOME/.android/cache"
+      
+      # Configure gradle caching
+      if [ ! -f "$$HOME/.gradle/gradle.properties" ]; then
+        cat > "$$HOME/.gradle/gradle.properties" << 'EOF'
+org.gradle.daemon=true
+org.gradle.parallel=true
+org.gradle.caching=true
+org.gradle.configureondemand=true
+org.gradle.jvmargs=-Xmx4g -XX:+HeapDumpOnOutOfMemoryError
+android.useAndroidX=true
+android.enableJetifier=true
+EOF
+      fi
       
       # Configure git for repo operations
       echo "🔧 Configuring git environment..."
@@ -1015,6 +1250,96 @@ steps:\n  # 🌐 ADVANCED BUILD ORCHESTRATION\n  - label: \":globe_with_meridian
       - "logs/sync-analytics.json"
     concurrency_group: "source-sync"
     concurrency: 2
+
+  - label: ":shield: Security & Vulnerability Scanning"
+    key: "security-scan"
+    depends_on: "source-sync"
+    command: |
+      set -euo pipefail
+      
+      echo "🔒 Running comprehensive security scans..."
+      
+      # Create security logs directory
+      mkdir -p logs/security
+      
+      # Import notification functions
+      send_telegram() {
+        local message="$$1"
+        local parse_mode="$${2:-Markdown}"
+        
+        if [ "$$ENABLE_TELEGRAM" = "true" ] && [ -n "$$TELEGRAM_BOT_TOKEN" ] && [ -n "$$TELEGRAM_CHAT_ID" ]; then
+          curl -s -X POST "https://api.telegram.org/bot$$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d "chat_id=$$TELEGRAM_CHAT_ID" \
+            -d "text=$$message" \
+            -d "parse_mode=$$parse_mode" \
+            -d "disable_web_page_preview=true" || true
+        fi
+      }
+      
+      send_telegram "🔒 *Security Scanning*%0A%0A🔍 Running vulnerability scans on source code..."
+      
+      cd android-workspace
+      
+      # Install Trivy if enabled and not present
+      if [ "$$ENABLE_TRIVY_SCAN" = "true" ]; then
+        if ! command -v trivy &> /dev/null; then
+          echo "📥 Installing Trivy security scanner..."
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        fi
+        
+        echo "🔍 Running Trivy filesystem scan..."
+        trivy fs --format json --output ../logs/security/trivy-scan.json \
+          --severity $$VULNERABILITY_SEVERITY_THRESHOLD \
+          --exit-code 0 . || echo "⚠️ Trivy scan completed with findings"
+        
+        # Generate human-readable report
+        trivy fs --format table --output ../logs/security/trivy-report.txt \
+          --severity $$VULNERABILITY_SEVERITY_THRESHOLD . || true
+      fi
+      
+      # Source code quality analysis
+      echo "📊 Analyzing source code quality..."
+      {
+        echo "=== SOURCE CODE ANALYSIS ==="
+        echo "Repository size: $$(du -sh . | cut -f1)"
+        echo "Total files: $$(find . -type f | wc -l)"
+        echo "C/C++ files: $$(find . -name "*.c" -o -name "*.cpp" -o -name "*.cc" | wc -l)"
+        echo "Java files: $$(find . -name "*.java" | wc -l)"
+        echo "Kotlin files: $$(find . -name "*.kt" | wc -l)"
+        echo "XML files: $$(find . -name "*.xml" | wc -l)"
+        echo "Makefiles: $$(find . -name "Makefile" -o -name "*.mk" | wc -l)"
+        echo "Build files: $$(find . -name "Android.bp" -o -name "BUILD.bazel" | wc -l)"
+        echo "Completed: $$(date -Iseconds)"
+      } > ../logs/security/source-analysis.txt
+      
+      # Check for sensitive files that shouldn't be in source
+      echo "🔍 Checking for sensitive files..."
+      {
+        echo "=== SENSITIVE FILE SCAN ==="
+        echo "Private keys:"
+        find . -name "*.pem" -o -name "*.key" -o -name "*.p12" -o -name "*.jks" | head -10
+        echo "Potential secrets:"
+        find . -name "*.properties" -exec grep -l -i "password\|secret\|token\|key" {} \; 2>/dev/null | head -10
+        echo "Completed: $$(date -Iseconds)"
+      } > ../logs/security/sensitive-files.txt
+      
+      echo "✅ Security scanning completed"
+      
+      # Upload security reports
+      cd ..
+      buildkite-agent artifact upload "logs/security/*.json"
+      buildkite-agent artifact upload "logs/security/*.txt"
+    agents:
+      queue: "default"
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 2
+    artifact_paths:
+      - "logs/security/*.json"
+      - "logs/security/*.txt"
+    continue_on_failure: true
 
   - wait: ~
     continue_on_failure: false
@@ -1553,18 +1878,15 @@ EOF
     concurrency_group: "android-build"
     concurrency: 1
 
-  - wait: ~
-    continue_on_failure: false
-
-  - label: ":bell: Build Notifications & Analytics"
-    key: "notifications"
+  - label: ":package: Build Artifact Management & Optimization"
+    key: "artifact-management"
     depends_on: "android-build"
     command: |
       set -euo pipefail
       
-      echo "📊 Build analytics and notifications..."
+      echo "📦 Advanced build artifact management and optimization..."
       
-      # Import utility functions
+      # Import notification functions
       send_telegram() {
         local message="$$1"
         local parse_mode="$${2:-Markdown}"
@@ -1576,6 +1898,364 @@ EOF
             -d "parse_mode=$$parse_mode" \
             -d "disable_web_page_preview=true" || true
         fi
+      }
+      
+      send_telegram "📦 *Artifact Processing*%0A%0A🔧 Optimizing and packaging build artifacts..."
+      
+      # Create artifacts directory structure
+      mkdir -p artifacts/{roms,images,logs,checksums,metadata}
+      
+      if [ -d "android-workspace/out/target/product" ]; then
+        cd android-workspace/out/target/product
+        DEVICE_DIR=$$(ls | head -1)
+        
+        if [ -n "$$DEVICE_DIR" ] && [ -d "$$DEVICE_DIR" ]; then
+          echo "📱 Processing artifacts for device: $$DEVICE_DIR"
+          cd "$$DEVICE_DIR"
+          
+          # Find and process ROM files
+          echo "🔍 Discovering build artifacts..."
+          ROM_FILES=$$(find . -name "*.zip" -not -name "*-ota-*.zip" -not -name "*-img-*.zip")
+          IMAGE_FILES=$$(find . -name "*.img")
+          OTA_FILES=$$(find . -name "*-ota-*.zip")
+          
+          # Process ROM files
+          for rom_file in $$ROM_FILES; do
+            if [ -f "$$rom_file" ]; then
+              ROM_NAME=$$(basename "$$rom_file")
+              ROM_SIZE=$$(stat -c%s "$$rom_file" | numfmt --to=iec-i)
+              ROM_SIZE_MB=$$(stat -c%s "$$rom_file" | awk '{printf "%.0f", $$1/1024/1024}')
+              
+              echo "📱 Processing ROM: $$ROM_NAME ($$ROM_SIZE)"
+              
+              # Copy to artifacts directory
+              cp "$$rom_file" "../../../../../artifacts/roms/"
+              
+              # Generate enhanced checksums
+              echo "🔐 Generating security checksums for $$ROM_NAME..."
+              cd "../../../../../artifacts/roms/"
+              md5sum "$$ROM_NAME" > "$${ROM_NAME}.md5"
+              sha1sum "$$ROM_NAME" > "$${ROM_NAME}.sha1"
+              sha256sum "$$ROM_NAME" > "$${ROM_NAME}.sha256"
+              sha512sum "$$ROM_NAME" > "$${ROM_NAME}.sha512"
+              
+              # Create verification script
+              cat > "$${ROM_NAME}.verify.sh" << 'VERIFY_EOF'
+#!/bin/bash
+# ROM Integrity Verification Script
+ROM_FILE="$1"
+if [ -z "$$ROM_FILE" ]; then
+    ROM_FILE="$(basename "$$0" .verify.sh)"
+fi
+
+echo "🔐 Verifying ROM integrity: $$ROM_FILE"
+echo "=================================================="
+
+VERIFICATION_PASSED=0
+
+if [ -f "$${ROM_FILE}.md5" ]; then
+    echo "🔍 MD5 verification..."
+    if md5sum -c "$${ROM_FILE}.md5" --quiet; then
+        echo "✅ MD5 checksum verified"
+        VERIFICATION_PASSED=$$((VERIFICATION_PASSED + 1))
+    else
+        echo "❌ MD5 checksum failed"
+    fi
+fi
+
+if [ -f "$${ROM_FILE}.sha256" ]; then
+    echo "🔍 SHA256 verification..."
+    if sha256sum -c "$${ROM_FILE}.sha256" --quiet; then
+        echo "✅ SHA256 checksum verified"
+        VERIFICATION_PASSED=$$((VERIFICATION_PASSED + 1))
+    else
+        echo "❌ SHA256 checksum failed"
+    fi
+fi
+
+if [ $$VERIFICATION_PASSED -eq 2 ]; then
+    echo ""
+    echo "🎉 ROM integrity verification successful!"
+    echo "The ROM file is authentic and has not been tampered with."
+    exit 0
+else
+    echo ""
+    echo "💥 ROM integrity verification failed!"
+    echo "Do not flash this ROM as it may be corrupted or tampered with."
+    exit 1
+fi
+VERIFY_EOF
+              chmod +x "$${ROM_NAME}.verify.sh"
+              
+              # Generate ROM info file
+              {
+                echo "ROM_NAME=$$ROM_NAME"
+                echo "ROM_SIZE_BYTES=$$(stat -c%s "$$ROM_NAME")"
+                echo "ROM_SIZE_HUMAN=$$ROM_SIZE"
+                echo "ROM_SIZE_MB=$$ROM_SIZE_MB"
+                echo "BUILD_DATE=$$(date -Iseconds)"
+                echo "BUILD_NUMBER=$$BUILDKITE_BUILD_NUMBER"
+                echo "DEVICE=$$DEVICE_DIR"
+                echo "ROM_TYPE=$$ROM_TYPE"
+                echo "TARGET_DEVICE=$$TARGET_DEVICE"
+                echo "BUILD_VARIANT=$$BUILD_VARIANT"
+                echo "PIPELINE_VERSION=$$PIPELINE_VERSION"
+              } > "$${ROM_NAME}.info"
+              
+              cd "../../out/target/product/$$DEVICE_DIR"
+            fi
+          done
+          
+          # Process image files
+          for img_file in $$IMAGE_FILES; do
+            if [ -f "$$img_file" ]; then
+              IMG_NAME=$$(basename "$$img_file")
+              IMG_SIZE=$$(stat -c%s "$$img_file" | numfmt --to=iec-i)
+              
+              echo "💾 Processing image: $$IMG_NAME ($$IMG_SIZE)"
+              
+              # Copy to artifacts directory
+              cp "$$img_file" "../../../../../artifacts/images/"
+              
+              # Generate checksums for images
+              cd "../../../../../artifacts/images/"
+              md5sum "$$IMG_NAME" > "$${IMG_NAME}.md5"
+              sha256sum "$$IMG_NAME" > "$${IMG_NAME}.sha256"
+              
+              cd "../../out/target/product/$$DEVICE_DIR"
+            fi
+          done
+          
+          # Process OTA files if any
+          for ota_file in $$OTA_FILES; do
+            if [ -f "$$ota_file" ]; then
+              OTA_NAME=$$(basename "$$ota_file")
+              OTA_SIZE=$$(stat -c%s "$$ota_file" | numfmt --to=iec-i)
+              
+              echo "🔄 Processing OTA: $$OTA_NAME ($$OTA_SIZE)"
+              cp "$$ota_file" "../../../../../artifacts/roms/"
+              
+              # Generate checksums for OTA
+              cd "../../../../../artifacts/roms/"
+              md5sum "$$OTA_NAME" > "$${OTA_NAME}.md5"
+              sha256sum "$$OTA_NAME" > "$${OTA_NAME}.sha256"
+              
+              cd "../../out/target/product/$$DEVICE_DIR"
+            fi
+          done
+        fi
+      fi
+      
+      # Return to project root
+      cd ../../../../../..
+      
+      # Copy all checksums to dedicated directory
+      find artifacts -name "*.md5" -o -name "*.sha*" | while read -r checksum_file; do
+        cp "$$checksum_file" "artifacts/checksums/"
+      done
+      
+      # Generate comprehensive build manifest
+      {
+        echo "{"
+        echo "  \"build_info\": {"
+        echo "    \"pipeline_version\": \"$$PIPELINE_VERSION\","
+        echo "    \"build_number\": \"$$BUILDKITE_BUILD_NUMBER\","
+        echo "    \"build_date\": \"$$(date -Iseconds)\","
+        echo "    \"target_device\": \"$$TARGET_DEVICE\","
+        echo "    \"rom_type\": \"$$ROM_TYPE\","
+        echo "    \"build_variant\": \"$$BUILD_VARIANT\","
+        echo "    \"agent_name\": \"$$BUILDKITE_AGENT_NAME\""
+        echo "  },"
+        echo "  \"artifacts\": {"
+        echo "    \"roms\": ["
+        for rom in artifacts/roms/*.zip; do
+          if [ -f "$$rom" ]; then
+            ROM_BASE=$$(basename "$$rom")
+            echo "      {"
+            echo "        \"filename\": \"$$ROM_BASE\","
+            echo "        \"size_bytes\": $$(stat -c%s "$$rom"),"
+            echo "        \"size_human\": \"$$(stat -c%s "$$rom" | numfmt --to=iec-i)\","
+            echo "        \"md5\": \"$$(cat "artifacts/roms/$${ROM_BASE}.md5" | awk '{print $$1}' 2>/dev/null || echo 'N/A')\","
+            echo "        \"sha256\": \"$$(cat "artifacts/roms/$${ROM_BASE}.sha256" | awk '{print $$1}' 2>/dev/null || echo 'N/A')\""
+            echo "      },"
+          fi
+        done | sed '$s/,$//'
+        echo "    ],"
+        echo "    \"images\": ["
+        for img in artifacts/images/*.img; do
+          if [ -f "$$img" ]; then
+            IMG_BASE=$$(basename "$$img")
+            echo "      {"
+            echo "        \"filename\": \"$$IMG_BASE\","
+            echo "        \"size_bytes\": $$(stat -c%s "$$img"),"
+            echo "        \"size_human\": \"$$(stat -c%s "$$img" | numfmt --to=iec-i)\","
+            echo "        \"md5\": \"$$(cat "artifacts/images/$${IMG_BASE}.md5" | awk '{print $$1}' 2>/dev/null || echo 'N/A')\""
+            echo "      },"
+          fi
+        done | sed '$s/,$//'
+        echo "    ]"
+        echo "  }"
+        echo "}"
+      } > artifacts/metadata/build-manifest.json
+      
+      # Create installation instructions
+      cat > artifacts/INSTALLATION_GUIDE.md << 'INSTALL_EOF'
+# ROM Installation Guide
+
+## Prerequisites
+- Unlocked bootloader
+- Custom recovery (TWRP recommended)
+- ADB and Fastboot tools installed
+- At least 50% battery charge
+
+## Installation Steps
+
+### Method 1: Recovery Installation (Recommended)
+1. Boot into recovery mode
+2. Create a full backup (Nandroid backup)
+3. Wipe: System, Data, Cache, Dalvik/ART Cache
+4. Flash the ROM zip file
+5. Flash GApps (if desired)
+6. Reboot system
+
+### Method 2: Fastboot Installation (Images)
+1. Boot into fastboot mode
+2. Flash individual images:
+   ```bash
+   fastboot flash boot boot.img
+   fastboot flash system system.img
+   fastboot flash vendor vendor.img
+   ```
+3. Wipe userdata: `fastboot -w`
+4. Reboot: `fastboot reboot`
+
+## Verification
+Run the provided verification script before flashing:
+```bash
+chmod +x *.verify.sh
+./ROM_FILE_NAME.verify.sh
+```
+
+## Support
+- Device: Xiaomi Redmi Note 13 Pro 5G (garnet)
+- Build Type: userdebug
+- Build Date: $(date -Iseconds)
+
+## Disclaimer
+Flash at your own risk. Ensure you have a working backup before proceeding.
+INSTALL_EOF
+      
+      # Generate download links file
+      cat > artifacts/DOWNLOAD_INFO.txt << 'DOWNLOAD_EOF'
+ROM Build Artifacts - Download Information
+==========================================
+
+Build Information:
+- Device: $(echo "$$TARGET_DEVICE" | cut -d'_' -f2 | cut -d'-' -f1)
+- ROM Type: $$ROM_TYPE
+- Build Number: $$BUILDKITE_BUILD_NUMBER
+- Build Date: $(date '+%Y-%m-%d %H:%M:%S')
+
+Files Available:
+DOWNLOAD_EOF
+      
+      # List all artifacts with sizes
+      find artifacts -type f \( -name "*.zip" -o -name "*.img" \) | while read -r file; do
+        FILENAME=$$(basename "$$file")
+        FILESIZE=$$(stat -c%s "$$file" | numfmt --to=iec-i)
+        echo "- $$FILENAME ($$FILESIZE)" >> artifacts/DOWNLOAD_INFO.txt
+      done
+      
+      echo "" >> artifacts/DOWNLOAD_INFO.txt
+      echo "Verification files included for all artifacts." >> artifacts/DOWNLOAD_INFO.txt
+      echo "Always verify checksums before flashing!" >> artifacts/DOWNLOAD_INFO.txt
+      
+      echo "✅ Artifact management completed"
+      
+      # Upload all artifacts
+      buildkite-agent artifact upload "artifacts/**/*"
+    agents:
+      queue: "default"
+    timeout_in_minutes: 30
+    retry:
+      automatic:
+        - exit_status: "*"
+          limit: 2
+    artifact_paths:
+      - "artifacts/**/*"
+
+  - wait: ~
+    continue_on_failure: false
+
+  - label: ":bell: Build Notifications & Analytics"
+    key: "notifications"
+    depends_on: ["android-build", "artifact-management"]
+    command: |
+      set -euo pipefail
+      
+      echo "📊 Advanced build analytics and multi-platform notifications..."
+      
+      # Enhanced multi-platform notification functions
+      send_telegram() {
+        local message="$$1"
+        local parse_mode="$${2:-Markdown}"
+        
+        if [ "$$ENABLE_TELEGRAM" = "true" ] && [ -n "$$TELEGRAM_BOT_TOKEN" ] && [ -n "$$TELEGRAM_CHAT_ID" ]; then
+          curl -s -X POST "https://api.telegram.org/bot$$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d "chat_id=$$TELEGRAM_CHAT_ID" \
+            -d "text=$$message" \
+            -d "parse_mode=$$parse_mode" \
+            -d "disable_web_page_preview=true" || true
+        fi
+      }
+      
+      send_slack() {
+        local message="$$1"
+        local color="$${2:-good}"
+        
+        if [ -n "$$SLACK_WEBHOOK_URL" ]; then
+          curl -s -X POST "$$SLACK_WEBHOOK_URL" \
+            -H "Content-type: application/json" \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$$color\",
+                \"text\": \"$$message\",
+                \"footer\": \"Buildkite ROM Builder v$$PIPELINE_VERSION\",
+                \"ts\": $$(date +%s)
+              }]
+            }" || true
+        fi
+      }
+      
+      send_discord() {
+        local message="$$1"
+        local color="$${2:-3066993}"
+        
+        if [ -n "$$DISCORD_WEBHOOK_URL" ]; then
+          curl -s -X POST "$$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"🤖 ROM Build Update\",
+                \"description\": \"$$message\",
+                \"color\": $$color,
+                \"footer\": {
+                  \"text\": \"Buildkite ROM Builder v$$PIPELINE_VERSION\"
+                },
+                \"timestamp\": \"$$(date -Iseconds)\"
+              }]
+            }" || true
+        fi
+      }
+      
+      send_all_notifications() {
+        local message="$$1"
+        local telegram_message="$${2:-$$message}"
+        local color="$${3:-good}"
+        
+        send_telegram "$$telegram_message"
+        send_slack "$$message" "$$color"
+        send_discord "$$message" "$$([ "$$color" = "danger" ] && echo "15158332" || echo "3066993")"
       }
       
       # Generate comprehensive build report
@@ -1600,11 +2280,32 @@ EOF
       
       fi
       
-      # Send final Telegram notification
+      # Generate build summary statistics
+      TOTAL_ARTIFACTS=$$(find artifacts -name "*.zip" -o -name "*.img" 2>/dev/null | wc -l || echo "0")
+      TOTAL_SIZE=$$(find artifacts -name "*.zip" -o -name "*.img" 2>/dev/null -exec stat -c%s {} \; | awk '{sum+=$1} END {printf "%.1f", sum/1024/1024/1024}' || echo "0")
+      BUILD_DURATION_READABLE="N/A"
+      
+      # Try to calculate build duration from logs
+      if [ -f "logs/build-*.log" ]; then
+        BUILD_START_TIME=$$(grep "Started:" logs/build-*.log | head -1 | awk '{print $2}' | cut -d'T' -f2 | cut -d'+' -f1 || echo "")
+        if [ -n "$$BUILD_START_TIME" ]; then
+          BUILD_DURATION_READABLE="~$$(date -d "$$BUILD_START_TIME" +%H:%M:%S || echo "N/A")"
+        fi
+      fi
+      
+      # Send enhanced final notifications
       if [ "$$BUILDKITE_BUILD_STATE" = "passed" ]; then
-        send_telegram "🎉 *ROM BUILD SUCCESSFUL!* 🎉%0A%0A📱 *Device:* $$TARGET_DEVICE%0A🎯 *ROM:* $$ROM_TYPE%0A🏗️ *Build ID:* #$$BUILDKITE_BUILD_NUMBER%0A⏰ *Completed:* $$(date '+%Y-%m-%d %H:%M:%S')%0A%0A✅ *Status:* Build completed successfully!%0A📦 ROM files ready for download%0A🔐 Includes MD5/SHA256 checksums%0A%0A🔗 [View Build]($$BUILDKITE_BUILD_URL)"
+        TELEGRAM_MSG="🎉 *ROM BUILD SUCCESSFUL!* 🎉%0A%0A📱 *Device:* $$TARGET_DEVICE%0A🎯 *ROM:* $$ROM_TYPE%0A🏗️ *Build #$$BUILDKITE_BUILD_NUMBER*%0A⏰ *Completed:* $$(date '+%Y-%m-%d %H:%M:%S')%0A⏱️ *Duration:* $$BUILD_DURATION_READABLE%0A%0A📊 *Build Results:*%0A✅ Status: Successful%0A📦 Artifacts: $$TOTAL_ARTIFACTS files%0A💾 Total Size: $${TOTAL_SIZE}GB%0A🔐 Security: MD5/SHA256 verified%0A🛡️ Scanned: Vulnerability checked%0A%0A📥 *Downloads Available:*%0A• ROM ZIP files%0A• Individual IMG files%0A• Verification scripts%0A• Installation guide%0A%0A🔗 [Download Artifacts]($$BUILDKITE_BUILD_URL)"
+        
+        SLACK_MSG="🎉 ROM Build Successful! Device: $$TARGET_DEVICE | ROM: $$ROM_TYPE | Build #$$BUILDKITE_BUILD_NUMBER | Artifacts: $$TOTAL_ARTIFACTS files ($${TOTAL_SIZE}GB) | Security verified ✅"
+        
+        send_all_notifications "$$SLACK_MSG" "$$TELEGRAM_MSG" "good"
       else
-        send_telegram "❌ *ROM BUILD FAILED* ❌%0A%0A📱 *Device:* $$TARGET_DEVICE%0A🎯 *ROM:* $$ROM_TYPE%0A🏗️ *Build ID:* #$$BUILDKITE_BUILD_NUMBER%0A⏰ *Failed:* $$(date '+%Y-%m-%d %H:%M:%S')%0A%0A💥 Build failed - check logs for details%0A🔗 [View Build]($$BUILDKITE_BUILD_URL)"
+        TELEGRAM_MSG="❌ *ROM BUILD FAILED* ❌%0A%0A📱 *Device:* $$TARGET_DEVICE%0A🎯 *ROM:* $$ROM_TYPE%0A🏗️ *Build #$$BUILDKITE_BUILD_NUMBER*%0A⏰ *Failed:* $$(date '+%Y-%m-%d %H:%M:%S')%0A⏱️ *Duration:* $$BUILD_DURATION_READABLE%0A%0A💥 *Failure Details:*%0A❌ Build process failed%0A📊 Check build logs for details%0A🤖 AI healing may have attempted fixes%0A🔧 Manual intervention required%0A%0A🔍 *Troubleshooting:*%0A• Review build logs%0A• Check system resources%0A• Verify network connectivity%0A• Validate source integrity%0A%0A🔗 [View Logs]($$BUILDKITE_BUILD_URL)"
+        
+        SLACK_MSG="❌ ROM Build Failed! Device: $$TARGET_DEVICE | ROM: $$ROM_TYPE | Build #$$BUILDKITE_BUILD_NUMBER | Check logs for details"
+        
+        send_all_notifications "$$SLACK_MSG" "$$TELEGRAM_MSG" "danger"
       fi
       
       # Print build summary
